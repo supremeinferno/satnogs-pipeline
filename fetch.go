@@ -39,6 +39,9 @@ var telemetryPageDelay = 6 * time.Second
 // pollLoop calls poll now and then every interval until ctx is cancelled (or
 // once, if interval is 0).
 func pollLoop(ctx context.Context, interval time.Duration, poll func(context.Context) error) error {
+	// Start the "last success" clock now. At 0 it would read as 1970 until
+	// the first poll finished, and PollStale would report a 20,000-day gap.
+	lastPoll.SetToCurrentTime()
 	for {
 		err := poll(ctx)
 		if err == nil {
