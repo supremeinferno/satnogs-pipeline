@@ -56,7 +56,7 @@ groups:
         expr: pipeline_battery_anomaly{rule="voltage_below_baseline"} == 1
         labels: {severity: warning}
         annotations:
-          summary: "{{ $labels.satellite }}: battery {{ $labels.battery }} voltage in sunlight is more than 4% below its own usual (median of the earlier sunlit beacons)"
+          summary: "{{ $labels.satellite }}: battery {{ $labels.battery }} voltage in sunlight is clearly below its own usual (the median of at least 40 earlier sunlit beacons over 3+ days)"
 
       - alert: BatteryVoltageLow
         expr: pipeline_battery_anomaly{rule="low_voltage"} == 1

@@ -31,13 +31,23 @@ const (
 	dischargeMA  = -50
 	minSpan      = 30 * time.Minute
 
-	// A sunlit battery whose voltage, over the newest dischargeRun sunlit
-	// readings, is more than dropFraction below its own median over the
-	// earlier sunlit readings. The median is over at least baselineMin readings.
+	// A sunlit battery whose voltage, as the median of its newest
+	// dischargeRun sunlit readings, is below its own median over the earlier
+	// sunlit readings by more than the larger of dropFloor of that median and
+	// madFactor times the readings' own spread (median absolute deviation).
 	// Comparing a battery with itself in the same light needs no unit, no
-	// chemistry and no pack size.
-	dropFraction = 0.04
-	baselineMin  = 8
+	// chemistry and no pack size, and the spread makes it forgiving of a
+	// battery that normally varies a lot. The baseline must be at least
+	// baselineMin readings over baselineSpan: replayed over real UWE-4 data,
+	// a baseline of 8 readings gave 14 false alarms in 138 readings, because
+	// its sunlit voltage sits at 4.20 V when charging and near 4.05 V when not,
+	// and a short baseline sees only one of the two. With 40 readings over 3
+	// days there were none. Until a satellite has that much history the rule
+	// stays quiet.
+	dropFloor    = 0.02
+	madFactor    = 8
+	baselineMin  = 40
+	baselineSpan = 72 * time.Hour
 
 	// How far back to read, and how old a TLE may be before the sunlight
 	// answer stops being trusted (it drifts by about a kilometre a day).
@@ -88,7 +98,7 @@ func lowVoltage(pts []Point, limitMV int) bool {
 // sunlight. pts are newest first.
 func voltageBelowBaseline(pts []Point) bool {
 	var recent, older []int
-	var newest, oldest time.Time
+	var newest, oldest, oldestBase time.Time
 	for _, p := range pts {
 		if !p.Sunlit {
 			continue
@@ -102,11 +112,26 @@ func voltageBelowBaseline(pts []Point) bool {
 			continue
 		}
 		older = append(older, p.VoltageMV)
+		oldestBase = p.At
 	}
-	if len(recent) < dischargeRun || newest.Sub(oldest) < minSpan || len(older) < baselineMin {
+	if len(recent) < dischargeRun || newest.Sub(oldest) < minSpan {
 		return false
 	}
-	return float64(median(older)-median(recent)) > dropFraction*float64(median(older))
+	if len(older) < baselineMin || oldest.Sub(oldestBase) < baselineSpan {
+		return false // not enough history yet to know what is normal
+	}
+	base := float64(median(older))
+	return base-float64(median(recent)) > max(dropFloor*base, madFactor*float64(mad(older)))
+}
+
+// mad is the median absolute deviation: how far readings typically are from their median.
+func mad(v []int) int {
+	m := median(v)
+	d := make([]int, len(v))
+	for i, x := range v {
+		d[i] = max(x-m, m-x)
+	}
+	return median(d)
 }
 
 func median(v []int) int {

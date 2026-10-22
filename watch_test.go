@@ -78,7 +78,7 @@ func TestLowVoltage(t *testing.T) {
 }
 
 // history builds sunlit readings every two hours: `recent` of them at the
-// newest end with voltage recentMV, the rest at baseMV.
+// newest end with voltage recentMV, the rest at baseMV (45 readings span 3.7 days).
 func history(recent, older int, recentMV, baseMV int) []Point {
 	var pts []Point
 	for i := 0; i < recent; i++ {
@@ -90,25 +90,48 @@ func history(recent, older int, recentMV, baseMV int) []Point {
 	return pts
 }
 
+// spread is `older` sunlit readings every two hours whose voltages are spread
+// evenly from lo to hi, after `recent` readings at recentMV.
+func spread(recent, older, recentMV, lo, hi int) []Point {
+	pts := history(recent, 0, recentMV, 0)
+	for i := 0; i < older; i++ {
+		mv := lo + (hi-lo)*i/(older-1)
+		pts = append(pts, atV(time.Duration(recent+i)*2*time.Hour, true, mv))
+	}
+	return pts
+}
+
 func TestVoltageBelowBaseline(t *testing.T) {
 	tests := []struct {
 		name string
 		pts  []Point
 		want bool
 	}{
-		{"as usual", history(3, 20, 16300, 16300), false},
-		{"a little lower is normal", history(3, 20, 16000, 16300), false}, // -1.8%
-		{"clearly lower", history(3, 20, 15400, 16300), true},             // -5.5%
-		{"higher is fine", history(3, 20, 16800, 16300), false},
-		{"too little history to know the baseline", history(3, baselineMin-1, 12000, 16300), false},
-		{"one low reading among the newest three is not enough", history(1, 22, 12000, 16300), false},
-		{"two low readings among the newest three are", history(2, 22, 12000, 16300), true},
+		{"as usual", history(3, 45, 16300, 16300), false},
+		{"a little lower is normal", history(3, 45, 16000, 16300), false}, // -1.8%, under the 2% floor
+		{"clearly lower", history(3, 45, 15400, 16300), true},             // -5.5%
+		{"higher is fine", history(3, 45, 16800, 16300), false},
+		{"works in any unit", history(3, 45, 7600, 8300), true}, // -8.4%, a two-cell pack
+		{"too few readings to know what is normal", history(3, baselineMin-1, 12000, 16300), false},
+		{"enough readings, but only a day of them",
+			append(history(3, 0, 12000, 0), func() []Point {
+				var p []Point
+				for i := 0; i < 50; i++ {
+					p = append(p, atV(time.Duration(6+i)*20*time.Minute, true, 16300)) // 50 readings in 17 hours
+				}
+				return p
+			}()...), false},
+		{"one low reading among the newest three is not enough", history(1, 46, 12000, 16300), false},
+		{"two low readings among the newest three are", history(2, 46, 12000, 16300), true},
 		{"fewer than three sunlit readings at all", history(2, 0, 12000, 16300), false},
 		{"the shadow does not count",
-			append([]Point{atV(0, false, 10000), atV(time.Hour, false, 10000), atV(2*time.Hour, false, 10000)}, history(3, 20, 16300, 16300)...), false},
+			append([]Point{atV(0, false, 10000), atV(time.Hour, false, 10000), atV(2*time.Hour, false, 10000)}, history(3, 45, 16300, 16300)...), false},
 		{"beacons of one pass are one event",
-			append([]Point{atV(0, true, 12000), atV(time.Minute, true, 12000), atV(2*time.Minute, true, 12000)}, history(0, 20, 0, 16300)...), false},
-		{"works in any unit", history(3, 20, 7600, 8300), true}, // -8.4%, a two-cell pack
+			append([]Point{atV(0, true, 12000), atV(time.Minute, true, 12000), atV(2*time.Minute, true, 12000)}, history(0, 45, 0, 16300)...), false},
+		// A battery that normally ranges from 3.9 to 4.3 V is not alarmed by a dip
+		// inside that range, but is by one well below it.
+		{"a dip inside the battery's own range", spread(3, 45, 3950, 3900, 4300), false},
+		{"far below the battery's own range", spread(3, 45, 3000, 3900, 4300), true},
 		{"no readings", nil, false},
 	}
 	for _, tt := range tests {
@@ -117,6 +140,15 @@ func TestVoltageBelowBaseline(t *testing.T) {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMAD(t *testing.T) {
+	if got := mad([]int{10, 10, 10, 10}); got != 0 {
+		t.Errorf("constant readings: %d", got)
+	}
+	if got := mad([]int{1, 2, 3, 4, 100}); got != 1 { // one outlier does not move it
+		t.Errorf("with an outlier: %d", got)
 	}
 }
 
