@@ -36,6 +36,8 @@ All measured on real UWE-4 data, 17 to 22 October 2026 (137 beacons over 5.1 day
 | Battery rule on the same history | Replayed at each of the 137 readings, "discharging in sunlight" and "low voltage" never fired. |
 | Same rule on made-up readings | Three in the shadow at -300 mA (what "current is negative" would flag): no alert. Three in sunlight at -120 mA: alert, delivered to Telegram, resolved when removed. |
 | Failure tests ([`scripts/chaos.sh`](scripts/chaos.sh)) | 6 breakages, 20 checks, 30 to 45 seconds, on Docker Compose and on Kubernetes: store down, RabbitMQ restart, PostgreSQL down, duplicates, a message that is not JSON. |
+| Throughput of `store` | 5,400 observations per second with one replica, 8,000 with two, 8,900 with four (draining a 20,000-message queue, Docker Compose on a laptop). See [Performance](#performance). |
+| Time in the pipeline | Published to stored: median 0.1 to 0.7 ms, 99th percentile under 7 ms, at 100 to 2,000 messages per second with one replica. |
 | CI | gofmt, vet, tests with the race detector, `go.mod`, shell scripts, Prometheus and Alertmanager configuration, Kubernetes manifests (kubeconform), Docker image. Dependabot proposes updates to Go modules, GitHub Actions and Docker images. |
 | Kubernetes (kind) | 11 pods running without restarts, 5 Prometheus targets up, 10 alert rules loaded. |
 
@@ -102,6 +104,41 @@ scripts/chaos.sh --k8s        # the kind cluster from k8s/deploy.sh, about 45 se
 On Kubernetes "store down" is `kubectl scale` to 0 and back to 2, "RabbitMQ restart" is a rollout restart of its pod, and "PostgreSQL down" scales its StatefulSet to 0 and back (its volume stays). The script puts `store` back to the replicas it found.
 
 It exits non-zero if a check fails and removes its own rows. To see it fail, drop the primary key of `observations`: the script stops at step 1. Doing exactly that showed a bug in the script's own cleanup: it purged the queue while `store` was still running, and messages `store` held unacknowledged went back to the queue afterwards. Cleanup now stops `store` first.
+
+## Performance
+
+`scripts/bench.sh` measures the `store` side with made-up observations (the SatNOGS API is not called). Run on Docker Compose, arm64 laptop, Docker Desktop with 10 CPUs and 8 GB; PostgreSQL, RabbitMQ and `store` share those CPUs. Each message is one transaction: an insert and a commit.
+
+**Throughput**: 20,000 messages are queued while `store` is stopped, then `store` is started and the time from the first to the last stored row is taken.
+
+| store replicas | seconds | per second |
+|---|---|---|
+| 1 | 3.7 | 5,353 |
+| 2 | 2.5 | 8,049 |
+| 4 | 2.2 | 8,891 |
+
+Going from 1 to 2 replicas helps; from 2 to 4 hardly does. I did not look into why (the database and the shared CPUs are the first suspects).
+
+**Time in the pipeline**: messages arrive at a steady rate for 15 seconds with one `store` replica; the delay is `stored_at - ended_at`, from publishing to the start of the insert transaction. `bench-publish` runs in the same Docker network as PostgreSQL, so both read one clock.
+
+| messages per second | p50 ms | p95 ms | p99 ms | max ms |
+|---|---|---|---|---|
+| 100 | 0.7 | 1.9 | 6.9 | 100.8 |
+| 500 | 0.2 | 0.3 | 0.6 | 15.0 |
+| 1,000 | 0.1 | 0.3 | 1.1 | 15.5 |
+| 2,000 | 0.1 | 0.4 | 1.7 | 17.2 |
+
+The publisher kept up with the rate (checked separately up to 3,000 per second), so the rows are what they say. The 100 ms maximum at 100 per second is not explained.
+
+What these numbers do not say:
+- They cover the `store` stage only. Before it, `fetch` is limited by the SatNOGS APIs (a rate limit of one request every few seconds), and in real life the delay from a satellite beacon to the database is mostly the ground stations uploading late, which this project cannot influence.
+- One run each, on one machine, not repeated, so there is no spread to quote.
+- UWE-4 sends about 27 beacons a day. The pipeline is idle; these numbers are headroom, not a need.
+
+```sh
+scripts/bench.sh            # about 2 minutes
+N=5000 scripts/bench.sh     # quicker
+```
 
 ## Monitoring
 
