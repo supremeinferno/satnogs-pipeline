@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -99,5 +102,37 @@ func TestValidate(t *testing.T) {
 		if validate(o) == nil {
 			t.Errorf("case %d: invalid observation accepted: %+v", i, o)
 		}
+	}
+}
+
+func TestAlertHandler(t *testing.T) {
+	var lines []string
+	h := alertHandler(func(f string, a ...any) { lines = append(lines, fmt.Sprintf(f, a...)) })
+
+	body := `{"alerts":[
+		{"status":"firing","labels":{"alertname":"DeadQueueNotEmpty","severity":"warning"},"annotations":{"summary":"2 message(s) in the dead queue"}},
+		{"status":"resolved","labels":{"alertname":"ServiceDown","severity":"critical"},"annotations":{"summary":"store is down"}}]}`
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/alert", strings.NewReader(body)))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status %d, want 204", rec.Code)
+	}
+	want := []string{
+		"ALERT FIRING: DeadQueueNotEmpty [warning] 2 message(s) in the dead queue",
+		"ALERT RESOLVED: ServiceDown [critical] store is down",
+	}
+	if !slices.Equal(lines, want) {
+		t.Fatalf("lines %q, want %q", lines, want)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/alert", strings.NewReader("not json")))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad body: status %d, want 400", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/alert", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET: status %d, want 405", rec.Code)
 	}
 }

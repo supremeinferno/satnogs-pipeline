@@ -55,6 +55,21 @@ Both programs serve Prometheus metrics on `:9100/metrics`. `docker compose up` a
 
 Counters are per process and restart from zero. The first poll after an empty start backfills a day or more of passes, which inflates the "pass end to stored" delay until real traffic dominates it.
 
+## Alerts
+
+Prometheus evaluates the rules in `monitoring/alerts.yml` and hands firing alerts to Alertmanager (http://localhost:9093), which posts them to the `notify` service. Today `notify` only logs one line per alert (`docker compose logs notify`); `alertHandler` in `notify.go` is where a Telegram or e-mail message would be sent.
+
+| Alert | Fires when |
+|---|---|
+| ServiceDown | `fetch` or `store` can't be scraped for 1 minute |
+| PollStale | no successful SatNOGS poll for 15 minutes (the interval is 5) |
+| APIErrors | more than 3 failed API requests in 10 minutes |
+| QueueBacklog | more than 100 messages waiting for 2 minutes |
+| DeadQueueNotEmpty | any message in the dead queue |
+| StoreFailing | `store` failed to write a message in the last 5 minutes |
+
+A stopped program exposes no metrics, so "time since last poll" can't notice it; that is what ServiceDown (`up == 0`) is for.
+
 ## Notes on the data
 
 - The API lists newest first, and for a busy satellite the first pages are all scheduled (future) passes, so requests carry a `start__lt=<now>` cutoff.

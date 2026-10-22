@@ -1,0 +1,12 @@
+route:
+  receiver: notify
+  group_by: [alertname]
+  group_wait: 5s       # short, so a demo shows up quickly; a few minutes is more usual
+  group_interval: 1m
+  repeat_interval: 4h  # re-send a still-firing alert this often
+
+receivers:
+  - name: notify
+    webhook_configs:
+      - url: http://notify:9200/alert
+        send_resolved: true

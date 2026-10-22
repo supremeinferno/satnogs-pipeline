@@ -3,6 +3,7 @@
 //
 //	satnogs-pipeline fetch   API -> queue
 //	satnogs-pipeline store   queue -> Postgres
+//	satnogs-pipeline notify  receives Alertmanager's webhook
 package main
 
 import (
@@ -17,8 +18,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 || (os.Args[1] != "fetch" && os.Args[1] != "store") {
-		fmt.Fprintln(os.Stderr, "usage: satnogs-pipeline fetch|store [flags]")
+	if len(os.Args) < 2 || (os.Args[1] != "fetch" && os.Args[1] != "store" && os.Args[1] != "notify") {
+		fmt.Fprintln(os.Stderr, "usage: satnogs-pipeline fetch|store|notify [flags]")
 		os.Exit(2)
 	}
 	cmd := os.Args[1]
@@ -27,6 +28,7 @@ func main() {
 	interval := fs.Duration("interval", 5*time.Minute, "fetch: time between polls; 0 = poll once and exit")
 	norad := fs.Int("norad", 25544, "fetch: only this satellite (0 = all)")
 	maxPages := fs.Int("max-pages", 10, "fetch: most pages (25 observations each) to read per poll")
+	listen := fs.String("listen", ":9200", "notify: address for the Alertmanager webhook")
 	metricsAddr := fs.String("metrics", ":9100", "address for the Prometheus /metrics endpoint")
 	fs.Parse(os.Args[2:])
 
@@ -46,6 +48,8 @@ func main() {
 		err = runFetch(ctx, amqpURL, *interval, *norad, *maxPages)
 	case "store":
 		err = runStore(ctx, dsn, amqpURL)
+	case "notify":
+		err = runNotify(ctx, *listen)
 	}
 	if err != nil {
 		log.Fatal(err)
