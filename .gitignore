@@ -2,3 +2,5 @@
 *.log
 /pipe
 /satnogs-pipeline
+
+scripts/kaitai/node_modules/

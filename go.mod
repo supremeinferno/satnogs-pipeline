@@ -4,6 +4,7 @@ go 1.26.2
 
 require (
 	github.com/jackc/pgx/v5 v5.11.0
+	github.com/kaitai-io/kaitai_struct_go_runtime v0.11.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rabbitmq/amqp091-go v1.16.0
 	github.com/supremeinferno/orbitscreen v0.0.0-20261022133433-ec1bab078ef8

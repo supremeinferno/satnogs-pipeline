@@ -1,0 +1,9 @@
+{
+  "name": "kaitai-generate",
+  "private": true,
+  "description": "Generates Go parsers from satnogs-decoders' Kaitai Struct definitions",
+  "dependencies": {
+    "js-yaml": "5.5.0",
+    "kaitai-struct-compiler": "0.11.0"
+  }
+}

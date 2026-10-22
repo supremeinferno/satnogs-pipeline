@@ -21,7 +21,8 @@ jobs:
           go-version-file: go.mod
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-      - run: go vet ./...
+      - name: go vet (not the generated parsers in internal/decoders)
+        run: go vet $(go list ./... | grep -v /internal/decoders/)
       - name: go.mod is tidy
         run: go mod tidy -diff
       - run: go test -race ./...
