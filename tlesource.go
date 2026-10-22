@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/supremeinferno/satnogs-pipeline/internal/tle"
+	"github.com/supremeinferno/orbitscreen/pkg/tle"
 )
 
 // celestrakURL is where current element sets come from; a variable so tests

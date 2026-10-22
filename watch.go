@@ -9,9 +9,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/supremeinferno/orbitscreen/pkg/sgp4"
+	"github.com/supremeinferno/orbitscreen/pkg/tle"
 	"github.com/supremeinferno/satnogs-pipeline/internal/orbit"
-	"github.com/supremeinferno/satnogs-pipeline/internal/sgp4"
-	"github.com/supremeinferno/satnogs-pipeline/internal/tle"
 )
 
 // The alert rules, with the numbers they come from. They were set from three
