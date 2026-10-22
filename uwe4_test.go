@@ -107,3 +107,5 @@ func TestDecodeUWE4NeverPanics(t *testing.T) {
 		DecodeUWE4(b) // only checking that it returns
 	}
 }
+
+func hexOf(b []byte) string { return hex.EncodeToString(b) }

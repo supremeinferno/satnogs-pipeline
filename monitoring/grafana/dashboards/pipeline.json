@@ -37,8 +37,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "rabbitmq_queue_messages_ready{queue=\"observations\"}",
-          "legendFormat": "waiting",
+          "expr": "rabbitmq_queue_messages_ready{queue=~\"observations|telemetry\"}",
+          "legendFormat": "{{queue}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -74,8 +74,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "rabbitmq_queue_messages_ready{queue=\"observations.dead\"}",
-          "legendFormat": "dead",
+          "expr": "rabbitmq_queue_messages_ready{queue=~\".+\\\\.dead\"}",
+          "legendFormat": "{{queue}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -111,8 +111,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "rate(pipeline_published_total[1m])",
-          "legendFormat": "published/s",
+          "expr": "sum by (queue) (rate(pipeline_published_total[1m]))",
+          "legendFormat": "{{queue}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -298,6 +298,43 @@
           "refId": "A",
           "expr": "histogram_quantile(0.95, sum by (le) (rate(pipeline_ingest_delay_seconds_bucket[15m])))",
           "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Telemetry frames handled per second, by result",
+      "description": "decoded = new reading; duplicate = heard by a second station; not_beacon and bad_checksum are radio noise and are dropped.",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(pipeline_telemetry_total[5m]))",
+          "legendFormat": "{{result}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

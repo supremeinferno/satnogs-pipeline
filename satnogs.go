@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,6 +29,27 @@ type Demod struct {
 
 // client has a timeout: http.Get uses http.DefaultClient, which waits forever.
 var client = &http.Client{Timeout: 30 * time.Second}
+
+// rateLimitError means the API asked us to slow down (HTTP 429).
+type rateLimitError struct{ after time.Duration }
+
+func (e rateLimitError) Error() string { return fmt.Sprintf("rate limited, retry after %s", e.after) }
+
+// checkStatus turns any answer other than 200 into an error. For 429 it reads
+// Retry-After (seconds), defaulting to a minute and capped at 15 minutes.
+func checkStatus(resp *http.Response) error {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusTooManyRequests:
+		after := time.Minute
+		if s, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && s > 0 {
+			after = time.Duration(s) * time.Second
+		}
+		return rateLimitError{after: min(after, 15*time.Minute)}
+	}
+	return fmt.Errorf("status %s", resp.Status)
+}
 
 // observationsURL is the first page of the API, newest observations first,
 // for passes that started before the given time. Without that cutoff the API
@@ -64,8 +86,8 @@ func fetchPage(ctx context.Context, url string) (obs []Observation, next string,
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, "", fmt.Errorf("get %s: status %s", url, resp.Status)
+	if err := checkStatus(resp); err != nil {
+		return nil, "", fmt.Errorf("get %s: %w", url, err)
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&obs); err != nil {
 		return nil, "", fmt.Errorf("decode %s: %w", url, err)

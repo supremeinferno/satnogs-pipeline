@@ -32,10 +32,15 @@ var (
 		Help: "Unix time of the last poll that finished without error.",
 	})
 
-	published = promauto.NewCounter(prometheus.CounterOpts{
+	published = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "pipeline_published_total",
-		Help: "Observations the broker confirmed.",
-	})
+		Help: "Messages the broker confirmed, by queue.",
+	}, []string{"queue"})
+
+	telemetryTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "pipeline_telemetry_total",
+		Help: "Telemetry frames handled by store, by result: decoded (new reading), duplicate (already stored), not_beacon, bad_checksum, rejected (sent to the dead queue), failed (will be retried).",
+	}, []string{"result"})
 
 	stored = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "pipeline_stored_total",

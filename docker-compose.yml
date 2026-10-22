@@ -44,6 +44,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  fetch-telemetry:
+    build: .
+    command: ["fetch-telemetry", "-interval", "5m"]
+    environment:
+      AMQP_URL: amqp://satnogs:satnogs@rabbitmq:5672/
+      # From .env next to this file (git-ignored).
+      SATNOGS_DB_TOKEN: ${SATNOGS_DB_TOKEN:-}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
   store:
     build: .
     command: ["store"]

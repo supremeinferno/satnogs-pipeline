@@ -4,14 +4,14 @@ groups:
       # A stopped program has no metrics at all, so "time since last poll"
       # can't see it: up == 0 (Prometheus couldn't scrape it) catches that.
       - alert: ServiceDown
-        expr: up{job=~"fetch|store"} == 0
+        expr: up{job=~"fetch|fetch-telemetry|store"} == 0
         for: 1m
         labels: {severity: critical}
         annotations:
           summary: "{{ $labels.job }} is down (cannot be scraped)"
 
       - alert: PollStale
-        expr: time() - pipeline_last_poll_success_timestamp_seconds{job="fetch"} > 900
+        expr: time() - pipeline_last_poll_success_timestamp_seconds{job=~"fetch|fetch-telemetry"} > 900
         for: 1m
         labels: {severity: warning}
         annotations:
@@ -24,17 +24,17 @@ groups:
           summary: "{{ $value | printf \"%.0f\" }} SatNOGS API errors in 10 minutes"
 
       - alert: QueueBacklog
-        expr: rabbitmq_queue_messages_ready{queue="observations"} > 100
+        expr: rabbitmq_queue_messages_ready{queue=~"observations|telemetry"} > 100
         for: 2m
         labels: {severity: warning}
         annotations:
-          summary: "{{ $value }} observations waiting in the queue; store is slow or stopped"
+          summary: "{{ $value }} messages waiting in {{ $labels.queue }}; store is slow or stopped"
 
       - alert: DeadQueueNotEmpty
-        expr: rabbitmq_queue_messages_ready{queue="observations.dead"} > 0
+        expr: rabbitmq_queue_messages_ready{queue=~".+\\.dead"} > 0
         labels: {severity: warning}
         annotations:
-          summary: "{{ $value }} message(s) in the dead queue; they can never be stored and need a look"
+          summary: "{{ $value }} message(s) in {{ $labels.queue }}; they can never be stored and need a look"
 
       - alert: StoreFailing
         expr: increase(pipeline_stored_total{result="failed"}[5m]) > 0

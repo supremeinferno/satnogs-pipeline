@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// runStore reads observations from the queue and writes them to Postgres,
-// reconnecting to the broker whenever the connection drops.
+// runStore reads observations and telemetry frames from their queues and
+// writes them to Postgres. Each queue has its own consumer, so a problem with
+// one doesn't hold up the other, and each reconnects to the broker whenever
+// its connection drops.
 func runStore(ctx context.Context, dsn, amqpURL string) error {
 	// A pool, not one connection: it reconnects by itself if Postgres restarts.
 	pool, err := pgxpool.New(ctx, dsn)
@@ -19,7 +24,45 @@ func runStore(ctx context.Context, dsn, amqpURL string) error {
 	}
 	defer pool.Close()
 
-	handle := func(ctx context.Context, o Observation) error {
+	var wg sync.WaitGroup
+	for queue, handle := range map[string]func(context.Context, []byte) error{
+		queueObservations: observationHandler(pool),
+		queueTelemetry:    telemetryHandler(pool),
+	} {
+		wg.Go(func() {
+			for ctx.Err() == nil {
+				if err := consume(ctx, amqpURL, queue, handle); err != nil && ctx.Err() == nil {
+					log.Printf("%s: consumer stopped, reconnecting in 5s: %v", queue, err)
+					sleep(ctx, 5*time.Second)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	log.Print("shutting down")
+	return nil
+}
+
+// validate rejects observations that decode but make no sense.
+func validate(o Observation) error {
+	if o.ID <= 0 || o.NoradID <= 0 || o.Status == "" || o.End.Before(o.Start) {
+		return errors.New("incomplete or inconsistent observation")
+	}
+	return nil
+}
+
+func observationHandler(pool *pgxpool.Pool) func(context.Context, []byte) error {
+	return func(ctx context.Context, body []byte) error {
+		var o Observation
+		err := json.Unmarshal(body, &o)
+		if err == nil {
+			err = validate(o)
+		}
+		if err != nil {
+			stored.WithLabelValues("rejected").Inc()
+			return permanent(err)
+		}
+
 		start := time.Now()
 		changed, err := save(ctx, pool, []Observation{o})
 		if err != nil {
@@ -35,14 +78,6 @@ func runStore(ctx context.Context, dsn, amqpURL string) error {
 		ingestDelay.Observe(time.Since(o.End).Seconds())
 		return nil
 	}
-	for ctx.Err() == nil {
-		if err := consume(ctx, amqpURL, handle); err != nil && ctx.Err() == nil {
-			log.Printf("consumer stopped, reconnecting in 5s: %v", err)
-			sleep(ctx, 5*time.Second)
-		}
-	}
-	log.Print("shutting down")
-	return nil
 }
 
 // save writes the observations in one transaction and returns how many rows

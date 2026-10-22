@@ -12,28 +12,32 @@ import (
 )
 
 const (
-	queueName = "observations"
-	deadQueue = "observations.dead" // messages the consumer rejected for good
+	queueObservations = "observations"
+	queueTelemetry    = "telemetry"
 )
 
-// declare creates both queues if they don't exist yet; declaring again with
-// the same settings changes nothing, so every program can call it on start.
-// Both are durable (they survive a broker restart). A message rejected
-// without requeue on the main queue is routed to the dead queue, where it
-// waits for a human instead of being retried forever or lost.
-func declare(ch *amqp.Channel) error {
-	if _, err := ch.QueueDeclare(deadQueue, true, false, false, false, nil); err != nil {
+// deadName is the dead-letter queue of a queue: where messages that can never
+// be handled wait for a human.
+func deadName(queue string) string { return queue + ".dead" }
+
+// declare creates a queue and its dead queue if they don't exist yet;
+// declaring again with the same settings changes nothing, so every program
+// can call it on start. Both are durable (they survive a broker restart). A
+// message rejected without requeue on the main queue is routed to the dead
+// queue instead of being retried forever or lost.
+func declare(ch *amqp.Channel, queue string) error {
+	if _, err := ch.QueueDeclare(deadName(queue), true, false, false, false, nil); err != nil {
 		return err
 	}
-	_, err := ch.QueueDeclare(queueName, true, false, false, false, amqp.Table{
-		"x-dead-letter-exchange":    "",        // the default exchange...
-		"x-dead-letter-routing-key": deadQueue, // ...routes by queue name
+	_, err := ch.QueueDeclare(queue, true, false, false, false, amqp.Table{
+		"x-dead-letter-exchange":    "",              // the default exchange...
+		"x-dead-letter-routing-key": deadName(queue), // ...routes by queue name
 	})
 	return err
 }
 
-// publisher sends observations to the queue. It connects on first use and
-// again after any failure: amqp091 does not reconnect by itself.
+// publisher sends messages to queues. It connects on first use and again
+// after any failure: amqp091 does not reconnect by itself.
 type publisher struct {
 	url  string
 	conn *amqp.Connection
@@ -47,7 +51,11 @@ func (p *publisher) connect() error {
 	}
 	ch, err := conn.Channel()
 	if err == nil {
-		err = declare(ch)
+		for _, q := range []string{queueObservations, queueTelemetry} {
+			if err = declare(ch, q); err != nil {
+				break
+			}
+		}
 	}
 	if err == nil {
 		// Publisher confirms: the broker acknowledges each message once it
@@ -69,9 +77,9 @@ func (p *publisher) close() {
 	p.conn, p.ch = nil, nil
 }
 
-// publish sends one observation and waits for the broker's confirmation.
-func (p *publisher) publish(ctx context.Context, o Observation) error {
-	body, err := json.Marshal(o)
+// publish sends v, as JSON, to queue and waits for the broker's confirmation.
+func (p *publisher) publish(ctx context.Context, queue string, v any) error {
+	body, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
@@ -80,45 +88,48 @@ func (p *publisher) publish(ctx context.Context, o Observation) error {
 			return fmt.Errorf("connect to rabbitmq: %w", err)
 		}
 	}
-	conf, err := p.ch.PublishWithDeferredConfirmWithContext(ctx, "", queueName, false, false, amqp.Publishing{
+	conf, err := p.ch.PublishWithDeferredConfirmWithContext(ctx, "", queue, false, false, amqp.Publishing{
 		ContentType:  "application/json",
 		DeliveryMode: amqp.Persistent, // written to disk, survives a broker restart
 		Body:         body,
 	})
 	if err != nil {
 		p.close() // connection is broken; reconnect on the next call
-		return fmt.Errorf("publish observation %d: %w", o.ID, err)
+		return fmt.Errorf("publish to %s: %w", queue, err)
 	}
 	acked, err := conf.WaitContext(ctx)
 	if err != nil {
 		p.close()
-		return fmt.Errorf("confirm observation %d: %w", o.ID, err)
+		return fmt.Errorf("confirm on %s: %w", queue, err)
 	}
 	if !acked {
-		return fmt.Errorf("broker refused observation %d", o.ID)
+		return fmt.Errorf("broker refused a message for %s", queue)
 	}
-	published.Inc()
+	published.WithLabelValues(queue).Inc()
 	return nil
 }
 
-// validate rejects messages that decode but make no sense.
-func validate(o Observation) error {
-	if o.ID <= 0 || o.NoradID <= 0 || o.Status == "" || o.End.Before(o.Start) {
-		return errors.New("incomplete or inconsistent observation")
-	}
-	return nil
-}
+// permanentError marks a failure that retrying cannot fix: the message goes
+// to the dead queue.
+type permanentError struct{ err error }
 
-// consume hands each queued observation to handle, until ctx is cancelled
+func (e permanentError) Error() string { return e.err.Error() }
+func (e permanentError) Unwrap() error { return e.err }
+
+func permanent(err error) error { return permanentError{err} }
+
+// consume hands each message on queue to handle, until ctx is cancelled
 // (returns nil) or the connection fails (returns the error; the caller
 // reconnects).
 //
 // A message is acknowledged only after handle succeeds. If this program dies
 // first, the broker gives the message to someone else: nothing is lost.
-//   - undecodable or invalid message: rejected without requeue, so it goes to
-//     the dead queue. Retrying cannot fix it, and it must not block the rest.
-//   - handle fails (database down): requeued, after a pause, to try again.
-func consume(ctx context.Context, url string, handle func(context.Context, Observation) error) error {
+//   - handle returns nil: acknowledged.
+//   - handle returns a permanent error (undecodable, invalid): rejected
+//     without requeue, so it goes to the dead queue. Retrying cannot fix it,
+//     and it must not block the rest.
+//   - any other error (database down): requeued, after a pause, to try again.
+func consume(ctx context.Context, url, queue string, handle func(context.Context, []byte) error) error {
 	conn, err := amqp.Dial(url)
 	if err != nil {
 		return err
@@ -128,7 +139,7 @@ func consume(ctx context.Context, url string, handle func(context.Context, Obser
 	if err != nil {
 		return err
 	}
-	if err := declare(ch); err != nil {
+	if err := declare(ch, queue); err != nil {
 		return err
 	}
 	// At most 10 unacknowledged messages at a time, so a slow consumer isn't
@@ -136,7 +147,7 @@ func consume(ctx context.Context, url string, handle func(context.Context, Obser
 	if err := ch.Qos(10, 0, false); err != nil {
 		return err
 	}
-	msgs, err := ch.Consume(queueName, "", false, false, false, false, nil) // autoAck off
+	msgs, err := ch.Consume(queue, "", false, false, false, false, nil) // autoAck off
 	if err != nil {
 		return err
 	}
@@ -152,31 +163,26 @@ func consume(ctx context.Context, url string, handle func(context.Context, Obser
 			if !ok {
 				return errors.New("delivery channel closed")
 			}
-			var o Observation
-			err := json.Unmarshal(m.Body, &o)
-			if err == nil {
-				err = validate(o)
-			}
-			if err != nil {
-				log.Printf("rejecting message to dead queue: %v: %.120s", err, m.Body)
-				stored.WithLabelValues("rejected").Inc()
+			err := handle(ctx, m.Body)
+			var perm permanentError
+			switch {
+			case err == nil:
+				if err := m.Ack(false); err != nil {
+					return err
+				}
+			case errors.As(err, &perm):
+				log.Printf("%s: rejecting message to the dead queue: %v: %.120s", queue, err, m.Body)
 				if err := m.Nack(false, false); err != nil {
 					return err
 				}
-				continue
-			}
-			if err := handle(ctx, o); err != nil {
-				log.Printf("observation %d failed, requeueing: %v", o.ID, err)
+			default:
+				log.Printf("%s: message failed, requeueing: %v", queue, err)
 				if err := m.Nack(false, true); err != nil {
 					return err
 				}
 				if sleep(ctx, 2*time.Second) != nil {
 					return nil
 				}
-				continue
-			}
-			if err := m.Ack(false); err != nil {
-				return err
 			}
 		}
 	}

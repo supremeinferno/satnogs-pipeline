@@ -7,16 +7,18 @@ Work in progress. The goal is a telemetry pipeline (fetch, decode, queue, store,
 ## How it fits together
 
 ```
-SatNOGS API --> fetch --> RabbitMQ queue --> store --> PostgreSQL
-                              |
-                              +--> dead queue (messages that can never be stored)
+SatNOGS Network API ---> fetch ------------> observations queue --+
+                                                                   +--> store --> PostgreSQL
+SatNOGS DB telemetry API --> fetch-telemetry --> telemetry queue --+
+                                  (each queue has a dead queue for messages that can never be stored)
 ```
 
-Two programs in one binary, so a slow or dead database never stops the fetching, and the other way round.
+Three programs in one binary, so a slow or dead database never stops the fetching, and the other way round.
 
 - `fetch` polls the observations API on an interval, follows its pagination, skips passes that haven't happened yet, and publishes each new or changed observation. It waits for the broker's confirmation (publisher confirms) before counting a message as sent.
 - `store` reads the queue and writes to Postgres. A message is acknowledged only after it is saved, so a crash loses nothing; an undecodable or invalid message goes to the dead queue instead of blocking the rest.
-- Running either twice never duplicates a row; a row is updated only when its status or frame count changed.
+- `fetch-telemetry` reads raw radio frames of one satellite (UWE-4, NORAD 43880) from the SatNOGS DB API, which needs an account token (`SATNOGS_DB_TOKEN` in `.env`), and respects its rate limit (HTTP 429, `Retry-After`). `store` decodes each frame into battery voltage, current, temperature and charge ([uwe4.go](uwe4.go)), checks the frame's checksum, and keeps one row per distinct frame: the same beacon heard by two ground stations is stored once. Frames that are not beacons or arrive damaged are counted and dropped; only frames that can never work (bad JSON, an unknown satellite) go to the dead queue.
+- Running any of them twice never duplicates a row; a row is updated only when its status or frame count changed.
 - Both survive their dependencies going down (API, broker, database) and shut down cleanly on Ctrl-C or SIGTERM.
 
 ## Run it
@@ -24,10 +26,12 @@ Two programs in one binary, so a slow or dead database never stops the fetching,
 Needs Docker. Go 1.26+ is needed only for development.
 
 ```sh
-docker compose up -d --build         # PostgreSQL, RabbitMQ, fetch (every 5 minutes), store, Prometheus, Grafana
+docker compose up -d --build         # PostgreSQL, RabbitMQ, fetch and fetch-telemetry (every 5 minutes), store, Prometheus, Grafana, Alertmanager, notify
 docker compose logs -f fetch store
 docker compose down                  # stop; add -v to also delete the data
 ```
+
+PostgreSQL applies `schema.sql` only when its volume is empty. After pulling a change to the schema, apply it to an existing database (it is written to be re-run): `docker compose exec -T postgres psql -U satnogs < schema.sql`.
 
 For development, run only the infrastructure in Docker and the programs from source:
 
@@ -90,4 +94,7 @@ kind delete cluster --name satnogs              # remove everything
 
 - The API lists newest first, and for a busy satellite the first pages are all scheduled (future) passes, so requests carry a `start__lt=<now>` cutoff.
 - Many recent observations are `unknown` until someone vets them. Observations older than the first page with no changes are not re-checked, so a late status change on an old row is missed.
-- Frame data (`demoddata`) are links to files, not JSON. The telemetry endpoint on db.satnogs.org needs an account token.
+- Observation frame data (`demoddata`) are links to files, not JSON; the telemetry API returns the raw frames directly.
+- The telemetry API returns raw frames only: its `decoded` field is empty or just `"influxdb"`, so decoding is done here. Many satellites there send Morse (CW) or APRS text; UWE-4 sends binary beacons with a documented layout (SatNOGS's Kaitai definition), which is why it was chosen.
+- `observation_id` is 0 for frames not uploaded through SatNOGS Network; they are real frames and are stored with a NULL observation.
+- A poll that fails part-way (for example on a 429) makes the next poll read all pages again instead of stopping at the first page with nothing new, so the pages it never reached are not lost.
