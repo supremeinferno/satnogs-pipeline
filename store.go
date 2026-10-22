@@ -3,9 +3,35 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// runStore reads observations from the queue and writes them to Postgres,
+// reconnecting to the broker whenever the connection drops.
+func runStore(ctx context.Context, dsn, amqpURL string) error {
+	// A pool, not one connection: it reconnects by itself if Postgres restarts.
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	handle := func(ctx context.Context, o Observation) error {
+		_, err := save(ctx, pool, []Observation{o})
+		return err
+	}
+	for ctx.Err() == nil {
+		if err := consume(ctx, amqpURL, handle); err != nil && ctx.Err() == nil {
+			log.Printf("consumer stopped, reconnecting in 5s: %v", err)
+			sleep(ctx, 5*time.Second)
+		}
+	}
+	log.Print("shutting down")
+	return nil
+}
 
 // save writes the observations in one transaction and returns how many rows
 // were inserted or changed.

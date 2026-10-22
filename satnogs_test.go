@@ -62,3 +62,42 @@ func TestObservationsURL(t *testing.T) {
 		t.Error("norad 0 should not filter by satellite")
 	}
 }
+
+func TestFresh(t *testing.T) {
+	seen := map[int]fingerprint{
+		1: {"good", 1},
+		2: {"unknown", 0},
+	}
+	in := []Observation{
+		{ID: 1, Status: "good", DemodData: []Demod{{}}},    // same: skipped
+		{ID: 2, Status: "good"},                            // status changed
+		{ID: 3, Status: "unknown"},                         // never seen
+		{ID: 4, Status: "unknown", DemodData: []Demod{{}}}, // never seen
+	}
+	var ids []int
+	for _, o := range fresh(in, seen) {
+		ids = append(ids, o.ID)
+	}
+	if want := []int{2, 3, 4}; !slices.Equal(ids, want) {
+		t.Fatalf("fresh ids %v, want %v", ids, want)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	start := time.Date(2026, 10, 22, 8, 0, 0, 0, time.UTC)
+	good := Observation{ID: 1, NoradID: 25544, Status: "good", Start: start, End: start.Add(time.Minute)}
+	if err := validate(good); err != nil {
+		t.Fatalf("valid observation rejected: %v", err)
+	}
+	bad := []Observation{
+		{},
+		{ID: 1, NoradID: 25544, Start: start, End: start.Add(time.Minute)},                  // no status
+		{ID: 1, NoradID: 25544, Status: "good", Start: start, End: start.Add(-time.Minute)}, // ends before start
+		{ID: 0, NoradID: 25544, Status: "good", Start: start, End: start.Add(time.Minute)},  // no id
+	}
+	for i, o := range bad {
+		if validate(o) == nil {
+			t.Errorf("case %d: invalid observation accepted: %+v", i, o)
+		}
+	}
+}

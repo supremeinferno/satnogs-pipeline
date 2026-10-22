@@ -11,5 +11,17 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: satnogs
+      RABBITMQ_DEFAULT_PASS: satnogs
+    ports:
+      - "5672:5672"   # AMQP, what the program talks to
+      - "15672:15672" # management UI: http://localhost:15672
+    volumes:
+      - rabbitdata:/var/lib/rabbitmq
+
 volumes:
   pgdata:
+  rabbitdata:

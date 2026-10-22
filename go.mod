@@ -2,7 +2,10 @@ module github.com/supremeinferno/satnogs-pipeline
 
 go 1.26.2
 
-require github.com/jackc/pgx/v5 v5.11.0
+require (
+	github.com/jackc/pgx/v5 v5.11.0
+	github.com/rabbitmq/amqp091-go v1.16.0
+)
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
