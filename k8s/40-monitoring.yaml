@@ -1,0 +1,162 @@
+# Prometheus, Alertmanager, notify and Grafana, with the same configuration
+# files as docker-compose.yml. deploy.sh turns monitoring/ into the ConfigMaps
+# used here. The Services have the same names as in Compose (fetch, store,
+# notify, alertmanager, prometheus), which is why monitoring/prometheus.yml
+# and monitoring/alertmanager.yml work unchanged.
+#
+# Their data (Prometheus' history, Grafana's database) lives in the pod and is
+# lost when it restarts. Fine for development; a real cluster would add volumes.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: notify, namespace: satnogs}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: notify}
+  template:
+    metadata:
+      labels: {app: notify}
+    spec:
+      containers:
+        - name: notify
+          image: satnogs-pipeline:dev
+          args: ["notify"]
+          env:
+            - name: TELEGRAM_TOKEN
+              valueFrom: {secretKeyRef: {name: telegram, key: TELEGRAM_TOKEN}}
+            - name: TELEGRAM_CHAT_ID
+              valueFrom: {secretKeyRef: {name: telegram, key: TELEGRAM_CHAT_ID}}
+          ports:
+            - {name: http, containerPort: 9200}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: notify, namespace: satnogs}
+spec:
+  selector: {app: notify}
+  ports: [{name: http, port: 9200}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: alertmanager, namespace: satnogs}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: alertmanager}
+  template:
+    metadata:
+      labels: {app: alertmanager}
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.28.1
+          args: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+          ports:
+            - {name: http, containerPort: 9093}
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/alertmanager, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: alertmanager-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: alertmanager, namespace: satnogs}
+spec:
+  selector: {app: alertmanager}
+  ports: [{name: http, port: 9093}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: prometheus, namespace: satnogs}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: prometheus}
+  template:
+    metadata:
+      labels: {app: prometheus}
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.5.0
+          args: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.enable-lifecycle"]
+          ports:
+            - {name: http, containerPort: 9090}
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/prometheus, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: prometheus-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: prometheus, namespace: satnogs}
+spec:
+  selector: {app: prometheus}
+  ports: [{name: http, port: 9090}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: grafana, namespace: satnogs}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: grafana}
+  template:
+    metadata:
+      labels: {app: grafana}
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.2.0
+          env:
+            # Local development only: no login, everyone is an admin.
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "true"}
+            - {name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Admin}
+            - {name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true"}
+          ports:
+            - {name: http, containerPort: 3000}
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: datasources, mountPath: /etc/grafana/provisioning/datasources, readOnly: true}
+            - {name: dashboard-providers, mountPath: /etc/grafana/provisioning/dashboards, readOnly: true}
+            - {name: dashboards, mountPath: /var/lib/grafana/dashboards, readOnly: true}
+      volumes:
+        - name: datasources
+          configMap: {name: grafana-datasources}
+        - name: dashboard-providers
+          configMap: {name: grafana-dashboard-providers}
+        - name: dashboards
+          configMap: {name: grafana-dashboards}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: grafana, namespace: satnogs}
+spec:
+  selector: {app: grafana}
+  ports: [{name: http, port: 3000}]

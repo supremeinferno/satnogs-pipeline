@@ -26,6 +26,14 @@ $K -n satnogs create secret generic telegram \
   --from-literal=TELEGRAM_TOKEN="${TELEGRAM_TOKEN:-}" --from-literal=TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}" \
   --dry-run=client -o yaml | $K apply -f -
 
+# The monitoring configuration is the same files Docker Compose uses.
+cm() { $K -n satnogs create configmap "$@" --dry-run=client -o yaml | $K apply -f -; }
+cm prometheus-config --from-file=monitoring/prometheus.yml --from-file=monitoring/alerts.yml
+cm alertmanager-config --from-file=monitoring/alertmanager.yml
+cm grafana-datasources --from-file=monitoring/grafana/provisioning/datasources
+cm grafana-dashboard-providers --from-file=monitoring/grafana/provisioning/dashboards
+cm grafana-dashboards --from-file=monitoring/grafana/dashboards
+
 $K apply -f k8s/
 
 # Postgres runs schema.sql only on an empty volume. The file can be applied
@@ -35,7 +43,7 @@ $K -n satnogs wait --for=condition=ready pod/postgres-0 --timeout=180s
 $K -n satnogs exec -i postgres-0 -- psql -U satnogs -q < schema.sql 2>&1 | grep -v NOTICE || true
 
 # Same tag, new image: restart the pods so they pick it up.
-$K -n satnogs rollout restart deployment/fetch deployment/fetch-telemetry deployment/store deployment/watch
+$K -n satnogs rollout restart deployment/fetch deployment/fetch-telemetry deployment/store deployment/watch deployment/notify
 
 if [[ -z "${SATNOGS_DB_TOKEN:-}" ]]; then
   echo "SATNOGS_DB_TOKEN is not set (.env): fetch-telemetry is switched off" >&2
