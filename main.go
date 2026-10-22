@@ -15,6 +15,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -32,7 +34,7 @@ func main() {
 	benchN := fs.Int("n", 1000, "bench-publish: how many observations")
 	benchRate := fs.Float64("rate", 0, "bench-publish: per second (0 = as fast as the broker confirms)")
 	benchFirst := fs.Int("first-id", 9100000000, "bench-publish: id of the first observation")
-	satellite := fs.Int("satellite", uwe4NORAD, "fetch-telemetry: NORAD id of the satellite")
+	satellites := fs.String("satellites", "all", "fetch-telemetry: NORAD ids, comma separated, or all (every satellite in the registry)")
 	maxPages := fs.Int("max-pages", 10, "fetch: most pages (25 observations each) to read per poll")
 	listen := fs.String("listen", ":9200", "notify: address for the Alertmanager webhook")
 	metricsAddr := fs.String("metrics", ":9100", "address for the Prometheus /metrics endpoint")
@@ -57,11 +59,15 @@ func main() {
 		if token == "" {
 			log.Fatal("SATNOGS_DB_TOKEN is not set (get one from your account on db.satnogs.org)")
 		}
-		err = runFetchTelemetry(ctx, amqpURL, token, *interval, *satellite, *maxPages)
+		norads, perr := parseSatellites(*satellites)
+		if perr != nil {
+			log.Fatal(perr)
+		}
+		err = runFetchTelemetry(ctx, amqpURL, token, *interval, norads, *maxPages)
 	case "store":
 		err = runStore(ctx, dsn, amqpURL)
 	case "watch":
-		err = runWatch(ctx, dsn, *interval, *satellite)
+		err = runWatch(ctx, dsn, *interval)
 	case "bench-publish":
 		err = runBenchPublish(ctx, amqpURL, *benchN, *benchRate, *benchFirst)
 	case "notify":
@@ -89,4 +95,28 @@ func sleep(ctx context.Context, d time.Duration) error {
 	case <-t.C:
 		return nil
 	}
+}
+
+// parseSatellites reads the -satellites flag: "all" or NORAD ids separated by
+// commas, each of which must be in the registry.
+func parseSatellites(flag string) ([]int, error) {
+	if flag == "all" {
+		var out []int
+		for _, s := range satellites {
+			out = append(out, s.NORAD)
+		}
+		return out, nil
+	}
+	var out []int
+	for _, f := range strings.Split(flag, ",") {
+		n, err := strconv.Atoi(strings.TrimSpace(f))
+		if err != nil {
+			return nil, fmt.Errorf("-satellites: %q is not a NORAD id", f)
+		}
+		if _, ok := lookupSatellite(n); !ok {
+			return nil, fmt.Errorf("-satellites: no decoder for satellite %d", n)
+		}
+		out = append(out, n)
+	}
+	return out, nil
 }

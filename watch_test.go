@@ -12,9 +12,14 @@ import (
 
 var t0 = time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 
-// at builds a reading `ago` before t0 with battery A at the given current.
-func at(ago time.Duration, sunlit bool, mA, mV int) Reading {
-	return Reading{At: t0.Add(-ago), Sunlit: sunlit, BattA: Battery{CurrentMA: mA, VoltageMV: mV}}
+// at builds a reading `ago` before t0 with the given current and voltage.
+func at(ago time.Duration, sunlit bool, mA, mV int) Point {
+	return Point{At: t0.Add(-ago), Sunlit: sunlit, CurrentMA: &mA, VoltageMV: mV}
+}
+
+// atV is a reading without a current, as most satellites send.
+func atV(ago time.Duration, sunlit bool, mV int) Point {
+	return Point{At: t0.Add(-ago), Sunlit: sunlit, VoltageMV: mV}
 }
 
 func TestDischargingInSunlight(t *testing.T) {
@@ -22,29 +27,30 @@ func TestDischargingInSunlight(t *testing.T) {
 	m := time.Minute
 	tests := []struct {
 		name string
-		rs   []Reading // newest first
+		pts  []Point // newest first
 		want bool
 	}{
 		{"three discharging sunlit readings over hours",
-			[]Reading{at(0, true, -120, 4000), at(2*h, true, -90, 4010), at(4*h, true, -80, 4020)}, true},
-		{"charging as it should", []Reading{at(0, true, 150, 4100), at(2*h, true, 140, 4100), at(4*h, true, 130, 4100)}, false},
-		{"one discharging reading is normal (seen 5 times in 41)",
-			[]Reading{at(0, true, -112, 4016), at(2*h, true, 100, 4100), at(4*h, true, 90, 4100)}, false},
+			[]Point{at(0, true, -120, 4000), at(2*h, true, -90, 4010), at(4*h, true, -80, 4020)}, true},
+		{"charging as it should", []Point{at(0, true, 150, 4100), at(2*h, true, 140, 4100), at(4*h, true, 130, 4100)}, false},
+		{"one discharging reading is normal (seen 8 times in 77)",
+			[]Point{at(0, true, -112, 4016), at(2*h, true, 100, 4100), at(4*h, true, 90, 4100)}, false},
 		{"older discharge, newest reading charging",
-			[]Reading{at(0, true, 80, 4100), at(2*h, true, -90, 4010), at(4*h, true, -80, 4020)}, false},
+			[]Point{at(0, true, 80, 4100), at(2*h, true, -90, 4010), at(4*h, true, -80, 4020)}, false},
 		{"discharging in the shadow is normal",
-			[]Reading{at(0, false, -300, 3800), at(2*h, false, -250, 3850), at(4*h, false, -280, 3820)}, false},
+			[]Point{at(0, false, -300, 3800), at(2*h, false, -250, 3850), at(4*h, false, -280, 3820)}, false},
 		{"shadow readings in between are skipped",
-			[]Reading{at(0, true, -120, 4000), at(1*h, false, -300, 3800), at(2*h, true, -90, 4010), at(3*h, false, -300, 3800), at(4*h, true, -80, 4020)}, true},
+			[]Point{at(0, true, -120, 4000), at(1*h, false, -300, 3800), at(2*h, true, -90, 4010), at(3*h, false, -300, 3800), at(4*h, true, -80, 4020)}, true},
 		{"three beacons of one pass are one event",
-			[]Reading{at(0, true, -120, 4000), at(1*m, true, -110, 4000), at(2*m, true, -100, 4000)}, false},
-		{"only two sunlit readings", []Reading{at(0, true, -120, 4000), at(2*h, true, -90, 4010)}, false},
-		{"threshold is exclusive", []Reading{at(0, true, dischargeMA, 4000), at(2*h, true, dischargeMA, 4000), at(4*h, true, dischargeMA, 4000)}, false},
+			[]Point{at(0, true, -120, 4000), at(1*m, true, -110, 4000), at(2*m, true, -100, 4000)}, false},
+		{"only two sunlit readings", []Point{at(0, true, -120, 4000), at(2*h, true, -90, 4010)}, false},
+		{"threshold is exclusive", []Point{at(0, true, dischargeMA, 4000), at(2*h, true, dischargeMA, 4000), at(4*h, true, dischargeMA, 4000)}, false},
+		{"a battery with no current has nothing to say", []Point{atV(0, true, 4000), atV(2*h, true, 4000), atV(4*h, true, 4000)}, false},
 		{"no readings", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := dischargingInSunlight(tt.rs, battA); got != tt.want {
+			if got := dischargingInSunlight(tt.pts); got != tt.want {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}
 		})
@@ -52,18 +58,65 @@ func TestDischargingInSunlight(t *testing.T) {
 }
 
 func TestLowVoltage(t *testing.T) {
-	if lowVoltage(nil, battA) {
+	const limit = 3500
+	if lowVoltage(nil, limit) {
 		t.Error("no readings must not be an alert")
 	}
-	if !lowVoltage([]Reading{at(0, false, -300, lowVoltageMV-1)}, battA) {
+	if !lowVoltage([]Point{atV(0, false, limit-1)}, limit) {
 		t.Error("below the limit should alert, in the shadow too")
 	}
-	if lowVoltage([]Reading{at(0, true, 100, lowVoltageMV)}, battA) {
+	if lowVoltage([]Point{atV(0, true, limit)}, limit) {
 		t.Error("at the limit is not below it")
 	}
+	if lowVoltage([]Point{atV(0, true, 100)}, 0) {
+		t.Error("no limit, no alert")
+	}
 	// Only the newest reading counts: an old low value has recovered.
-	if lowVoltage([]Reading{at(0, true, 100, 4000), at(time.Hour, false, -300, 3400)}, battA) {
+	if lowVoltage([]Point{atV(0, true, 4000), atV(time.Hour, false, 3400)}, limit) {
 		t.Error("old low reading should not alert")
+	}
+}
+
+// history builds sunlit readings every two hours: `recent` of them at the
+// newest end with voltage recentMV, the rest at baseMV.
+func history(recent, older int, recentMV, baseMV int) []Point {
+	var pts []Point
+	for i := 0; i < recent; i++ {
+		pts = append(pts, atV(time.Duration(i)*2*time.Hour, true, recentMV))
+	}
+	for i := 0; i < older; i++ {
+		pts = append(pts, atV(time.Duration(recent+i)*2*time.Hour, true, baseMV))
+	}
+	return pts
+}
+
+func TestVoltageBelowBaseline(t *testing.T) {
+	tests := []struct {
+		name string
+		pts  []Point
+		want bool
+	}{
+		{"as usual", history(3, 20, 16300, 16300), false},
+		{"a little lower is normal", history(3, 20, 16000, 16300), false}, // -1.8%
+		{"clearly lower", history(3, 20, 15400, 16300), true},             // -5.5%
+		{"higher is fine", history(3, 20, 16800, 16300), false},
+		{"too little history to know the baseline", history(3, baselineMin-1, 12000, 16300), false},
+		{"one low reading among the newest three is not enough", history(1, 22, 12000, 16300), false},
+		{"two low readings among the newest three are", history(2, 22, 12000, 16300), true},
+		{"fewer than three sunlit readings at all", history(2, 0, 12000, 16300), false},
+		{"the shadow does not count",
+			append([]Point{atV(0, false, 10000), atV(time.Hour, false, 10000), atV(2*time.Hour, false, 10000)}, history(3, 20, 16300, 16300)...), false},
+		{"beacons of one pass are one event",
+			append([]Point{atV(0, true, 12000), atV(time.Minute, true, 12000), atV(2*time.Minute, true, 12000)}, history(0, 20, 0, 16300)...), false},
+		{"works in any unit", history(3, 20, 7600, 8300), true}, // -8.4%, a two-cell pack
+		{"no readings", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := voltageBelowBaseline(tt.pts); got != tt.want {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

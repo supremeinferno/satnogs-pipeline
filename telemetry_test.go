@@ -76,7 +76,7 @@ func TestFreshFrames(t *testing.T) {
 	a := TelemetryFrame{Frame: "aa", Timestamp: at}
 	b := TelemetryFrame{Frame: "bb", Timestamp: at}
 	aAgain := TelemetryFrame{Frame: "aa", Timestamp: at.Add(6 * time.Second)} // same bytes, heard by another station
-	seen := map[string]bool{"aa@" + at.Format(time.RFC3339): true}
+	seen := map[string]bool{frameKey(a): true}
 
 	got := freshFrames([]TelemetryFrame{a, b, aAgain}, seen)
 	if len(got) != 2 || got[0] != b || got[1] != aAgain {
@@ -100,15 +100,27 @@ func TestDecodeTelemetryMessage(t *testing.T) {
 	good := TelemetryFrame{NoradID: uwe4NORAD, Timestamp: at, ObservationID: 1, StationID: 2}
 	good.Frame = hexOf(frames["2026-10-22T11:00:08Z"])
 
-	// A real beacon decodes.
-	_, raw, r, err := decodeTelemetryMessage(message(t, good))
-	if err != nil || len(raw) != 74 || r.BattA.VoltageMV != 4108 {
-		t.Fatalf("good message: err %v, %d bytes, reading %+v", err, len(raw), r)
+	// A real UWE-4 beacon decodes into its two batteries.
+	_, sat, raw, d, err := decodeTelemetryMessage(message(t, good))
+	if err != nil || sat.Name != "UWE-4" || len(raw) != 74 || len(d.Batteries) != 2 || d.Batteries[0].VoltageMV != 4108 {
+		t.Fatalf("good message: err %v, %s, %d bytes, %+v", err, sat.Name, len(raw), d)
 	}
+
+	// So does a real CatSat frame, through the same path: the first one in the
+	// test data that carries a battery.
+	var cat TelemetryFrame
+	for _, f := range framesOf(t, "catsat") {
+		cat = TelemetryFrame{NoradID: 60246, Frame: hexOf(f), Timestamp: at}
+		if _, _, _, d, err := decodeTelemetryMessage(message(t, cat)); err == nil && len(d.Batteries) == 1 {
+			goto catsatOK
+		}
+	}
+	t.Fatal("no CatSat frame decoded through decodeTelemetryMessage")
+catsatOK:
 
 	// A frame without an observation id (uploaded outside SatNOGS Network) is fine.
 	noObs := TelemetryFrame{NoradID: uwe4NORAD, Frame: good.Frame, Timestamp: at}
-	if _, _, _, err := decodeTelemetryMessage(message(t, noObs)); err != nil {
+	if _, _, _, _, err := decodeTelemetryMessage(message(t, noObs)); err != nil {
 		t.Fatalf("frame without observation id: %v", err)
 	}
 
@@ -119,14 +131,14 @@ func TestDecodeTelemetryMessage(t *testing.T) {
 		want     error
 	}{
 		{"not json", []byte("garbage"), true, nil},
-		{"other satellite", message(t, TelemetryFrame{NoradID: 25544, Frame: good.Frame, Timestamp: at, ObservationID: 1}), true, nil},
+		{"satellite with no decoder", message(t, TelemetryFrame{NoradID: 25544, Frame: good.Frame, Timestamp: at, ObservationID: 1}), true, nil},
 		{"no time", message(t, TelemetryFrame{NoradID: uwe4NORAD, Frame: good.Frame, ObservationID: 1}), true, nil},
 		{"not hex", message(t, TelemetryFrame{NoradID: uwe4NORAD, Frame: "zz", Timestamp: at, ObservationID: 1}), true, nil},
 		{"short frame", message(t, TelemetryFrame{NoradID: uwe4NORAD, Frame: "abcd", Timestamp: at, ObservationID: 1}), false, ErrNotBeacon},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, _, err := decodeTelemetryMessage(tt.body)
+			_, _, _, _, err := decodeTelemetryMessage(tt.body)
 			var perm permanentError
 			if got := errors.As(err, &perm); got != tt.wantPerm {
 				t.Fatalf("permanent = %v, want %v (err %v)", got, tt.wantPerm, err)
@@ -138,8 +150,6 @@ func TestDecodeTelemetryMessage(t *testing.T) {
 	}
 }
 
-// A poll that fails part-way must not leave a hole: the next poll has to read
-// on past pages that look "already seen" from the top.
 func TestPollTelemetryCatchesUpAfterPartialFailure(t *testing.T) {
 	telemetryPageDelay = 0
 	defer func() { telemetryPageDelay = 6 * time.Second }()
@@ -248,5 +258,20 @@ func TestPollTelemetryWaitsOutRateLimit(t *testing.T) {
 	}
 	if len(published) != 2 || hits["/p1"] != 1 || hits["/p2"] != 2 {
 		t.Fatalf("published %v, hits %v; want both frames, page 1 read once, page 2 twice", published, hits)
+	}
+}
+
+func TestParseSatellites(t *testing.T) {
+	all, err := parseSatellites("all")
+	if err != nil || len(all) != len(satellites) {
+		t.Fatalf("all: %v, %v", all, err)
+	}
+	if got, err := parseSatellites("43880, 60246"); err != nil || len(got) != 2 || got[1] != 60246 {
+		t.Fatalf("list: %v, %v", got, err)
+	}
+	for _, bad := range []string{"abc", "25544", "43880,,1"} {
+		if _, err := parseSatellites(bad); err == nil {
+			t.Errorf("%q should be refused", bad)
+		}
 	}
 }

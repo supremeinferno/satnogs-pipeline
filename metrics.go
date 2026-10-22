@@ -39,12 +39,12 @@ var (
 
 	telemetryTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "pipeline_telemetry_total",
-		Help: "Telemetry frames handled by store, by result: decoded (new reading), duplicate (already stored), not_beacon, bad_checksum, rejected (sent to the dead queue), failed (will be retried).",
-	}, []string{"result"})
+		Help: "Telemetry frames handled by store, by result: decoded (new reading), duplicate (already stored), not_beacon, bad_checksum, implausible (parsed, but not a believable battery), rejected (sent to the dead queue), failed (will be retried).",
+	}, []string{"result", "satellite"})
 
 	stored = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "pipeline_stored_total",
-		Help: "Messages handled by store, by result: stored (new or changed row), unchanged, rejected (sent to the dead queue), failed (will be retried).",
+		Help: "Messages handled by store, by result: stored (new or changed row), unchanged, implausible (parsed, but not a believable battery), rejected (sent to the dead queue), failed (will be retried).",
 	}, []string{"result"})
 
 	storeSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
@@ -57,32 +57,37 @@ var (
 	batteryMV = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pipeline_battery_voltage_millivolts",
 		Help: "Voltage in the newest beacon, by battery.",
-	}, []string{"battery"})
+	}, []string{"satellite", "battery"})
 
 	batteryMA = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pipeline_battery_current_milliamps",
 		Help: "Current in the newest beacon, by battery (positive charging).",
-	}, []string{"battery"})
+	}, []string{"satellite", "battery"})
 
 	batteryAnomaly = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pipeline_battery_anomaly",
-		Help: "1 while a battery rule is violated: discharging_in_sunlight, low_voltage.",
-	}, []string{"battery", "rule"})
+		Help: "1 while a battery rule is violated: discharging_in_sunlight, voltage_below_baseline, low_voltage.",
+	}, []string{"satellite", "battery", "rule"})
 
-	satelliteSunlit = promauto.NewGauge(prometheus.GaugeOpts{
+	satelliteSunlit = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pipeline_satellite_in_sunlight",
 		Help: "1 if SGP4 puts the satellite in sunlight right now, 0 in the Earth's shadow.",
-	})
+	}, []string{"satellite"})
 
-	telemetryAge = promauto.NewGauge(prometheus.GaugeOpts{
+	telemetryAge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pipeline_telemetry_age_seconds",
 		Help: "Seconds since the newest stored beacon was received.",
-	})
+	}, []string{"satellite"})
 
-	tleAge = promauto.NewGauge(prometheus.GaugeOpts{
+	staleAfter = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pipeline_telemetry_stale_after_seconds",
+		Help: "How long without a beacon is worth an alert, per satellite.",
+	}, []string{"satellite"})
+
+	tleAge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pipeline_tle_age_seconds",
 		Help: "Age of the element set used for sunlight, measured from its epoch.",
-	})
+	}, []string{"satellite"})
 
 	// How long after a pass ended its data reached the database. Dominated by
 	// how late ground stations upload, which the pipeline cannot control.

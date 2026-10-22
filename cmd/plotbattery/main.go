@@ -109,8 +109,9 @@ func loadPoints(ctx context.Context, dsn string, norad int, m *sgp4.Satellite) (
 		return nil, err
 	}
 	defer pool.Close()
-	rows, err := pool.Query(ctx, `SELECT received_at, batt_a_ma FROM telemetry
-		WHERE norad_id = $1 AND station_id IS DISTINCT FROM -1 ORDER BY received_at`, norad)
+	rows, err := pool.Query(ctx, `SELECT received_at, current_ma FROM battery_readings
+		WHERE norad_id = $1 AND battery = 'a' AND current_ma IS NOT NULL AND station_id IS DISTINCT FROM -1
+		ORDER BY received_at`, norad)
 	if err != nil {
 		return nil, err
 	}
