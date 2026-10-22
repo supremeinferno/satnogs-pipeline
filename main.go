@@ -20,8 +20,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 || (os.Args[1] != "fetch" && os.Args[1] != "fetch-telemetry" && os.Args[1] != "store" && os.Args[1] != "watch" && os.Args[1] != "notify") {
-		fmt.Fprintln(os.Stderr, "usage: satnogs-pipeline fetch|fetch-telemetry|store|watch|notify [flags]")
+	if len(os.Args) < 2 || (os.Args[1] != "fetch" && os.Args[1] != "fetch-telemetry" && os.Args[1] != "store" && os.Args[1] != "watch" && os.Args[1] != "notify" && os.Args[1] != "bench-publish") {
+		fmt.Fprintln(os.Stderr, "usage: satnogs-pipeline fetch|fetch-telemetry|store|watch|notify|bench-publish [flags]")
 		os.Exit(2)
 	}
 	cmd := os.Args[1]
@@ -29,6 +29,9 @@ func main() {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	interval := fs.Duration("interval", 5*time.Minute, "fetch: time between polls; 0 = poll once and exit")
 	norad := fs.Int("norad", 25544, "fetch: only this satellite (0 = all)")
+	benchN := fs.Int("n", 1000, "bench-publish: how many observations")
+	benchRate := fs.Float64("rate", 0, "bench-publish: per second (0 = as fast as the broker confirms)")
+	benchFirst := fs.Int("first-id", 9100000000, "bench-publish: id of the first observation")
 	satellite := fs.Int("satellite", uwe4NORAD, "fetch-telemetry: NORAD id of the satellite")
 	maxPages := fs.Int("max-pages", 10, "fetch: most pages (25 observations each) to read per poll")
 	listen := fs.String("listen", ":9200", "notify: address for the Alertmanager webhook")
@@ -59,6 +62,8 @@ func main() {
 		err = runStore(ctx, dsn, amqpURL)
 	case "watch":
 		err = runWatch(ctx, dsn, *interval, *satellite)
+	case "bench-publish":
+		err = runBenchPublish(ctx, amqpURL, *benchN, *benchRate, *benchFirst)
 	case "notify":
 		err = runNotify(ctx, *listen, os.Getenv("TELEGRAM_TOKEN"), os.Getenv("TELEGRAM_CHAT_ID"))
 	}

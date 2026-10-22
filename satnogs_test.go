@@ -193,3 +193,14 @@ func TestFormatAlert(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestBenchObservationIsValid(t *testing.T) {
+	at := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	o := benchObservation(9100000007, at)
+	if err := validate(o); err != nil {
+		t.Fatalf("store would reject a bench observation: %v", err)
+	}
+	if !o.End.Equal(at) || o.ID != 9100000007 {
+		t.Fatalf("got %+v", o)
+	}
+}
