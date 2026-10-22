@@ -32,6 +32,10 @@ const retryAfterFailure = 30 * time.Second
 // (the DB one rate-limits quickly). A variable so tests can set it to 0.
 var pageDelay = 2 * time.Second
 
+// telemetryPageDelay is the same for the SatNOGS DB API, which answered 429
+// every eight to ten seconds when asked once a second or two.
+var telemetryPageDelay = 6 * time.Second
+
 // pollLoop calls poll now and then every interval until ctx is cancelled (or
 // once, if interval is 0).
 func pollLoop(ctx context.Context, interval time.Duration, poll func(context.Context) error) error {
@@ -93,8 +97,12 @@ func poll(ctx context.Context, publish publishFunc, url string, maxPages int, se
 	var got, sent int
 	pages := 0
 	for url != "" && pages < maxPages {
-		obs, next, err := fetchPage(ctx, url)
-		if err != nil {
+		var obs []Observation
+		var next string
+		if err := retryRateLimited(ctx, func() (err error) {
+			obs, next, err = fetchPage(ctx, url)
+			return err
+		}); err != nil {
 			return err
 		}
 		pages++

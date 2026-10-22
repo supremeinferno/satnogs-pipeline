@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -51,6 +53,31 @@ func checkStatus(resp *http.Response) error {
 	return fmt.Errorf("status %s", resp.Status)
 }
 
+// maxRateLimitRetries is how many times one page is retried after a 429
+// before the poll gives up. rateLimitSlack is added to the wait the API asked
+// for. Variables so tests can shorten them.
+var (
+	maxRateLimitRetries = 5
+	rateLimitSlack      = time.Second
+)
+
+// retryRateLimited runs f. When the API answers 429 it waits as long as it
+// asked and runs f again, rather than failing the whole poll: starting over
+// from the first page would spend the very budget the API is rationing.
+func retryRateLimited(ctx context.Context, f func() error) error {
+	for attempt := 0; ; attempt++ {
+		err := f()
+		var rl rateLimitError
+		if !errors.As(err, &rl) || attempt == maxRateLimitRetries {
+			return err
+		}
+		log.Printf("rate limited: waiting %s, then trying the same page again", rl.after+rateLimitSlack)
+		if err := sleep(ctx, rl.after+rateLimitSlack); err != nil {
+			return err
+		}
+	}
+}
+
 // observationsURL is the first page of the API, newest observations first,
 // for passes that started before the given time. Without that cutoff the API
 // opens with every pass scheduled for the next days (over 100 for the ISS),
@@ -68,7 +95,11 @@ func observationsURL(norad int, before time.Time) string {
 func fetchPage(ctx context.Context, url string) (obs []Observation, next string, err error) {
 	defer func() {
 		outcome := "ok"
-		if err != nil {
+		var rl rateLimitError
+		switch {
+		case errors.As(err, &rl):
+			outcome = "rate_limited"
+		case err != nil:
 			outcome = "error"
 		}
 		apiRequests.WithLabelValues(outcome).Inc()

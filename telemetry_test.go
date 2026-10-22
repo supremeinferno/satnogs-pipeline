@@ -141,8 +141,8 @@ func TestDecodeTelemetryMessage(t *testing.T) {
 // A poll that fails part-way must not leave a hole: the next poll has to read
 // on past pages that look "already seen" from the top.
 func TestPollTelemetryCatchesUpAfterPartialFailure(t *testing.T) {
-	pageDelay = 0
-	defer func() { pageDelay = 2 * time.Second }()
+	telemetryPageDelay = 0
+	defer func() { telemetryPageDelay = 6 * time.Second }()
 
 	at := time.Date(2026, 10, 22, 11, 0, 0, 0, time.UTC)
 	frame := func(hex string) string {
@@ -160,8 +160,7 @@ func TestPollTelemetryCatchesUpAfterPartialFailure(t *testing.T) {
 			w.Write([]byte(`{"next":"` + srv.URL + `/p3","results":[` + frame("03") + `,` + frame("04") + `]}`))
 		case "/p3":
 			if failPage3 {
-				w.Header().Set("Retry-After", "1")
-				w.WriteHeader(http.StatusTooManyRequests)
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 			w.Write([]byte(`{"next":null,"results":[` + frame("05") + `,` + frame("06") + `]}`))
@@ -180,7 +179,7 @@ func TestPollTelemetryCatchesUpAfterPartialFailure(t *testing.T) {
 		return pollTelemetry(context.Background(), publish, "TOK", srv.URL+"/p1", 10, seen, &partial)
 	}
 
-	// Poll 1 gets through two pages, then page 3 is rate limited.
+	// Poll 1 gets through two pages, then page 3 fails.
 	failPage3 = true
 	if err := poll(); err == nil {
 		t.Fatal("poll 1 should fail")
@@ -205,5 +204,49 @@ func TestPollTelemetryCatchesUpAfterPartialFailure(t *testing.T) {
 	}
 	if len(requests) != 1 || len(published) != 6 {
 		t.Fatalf("poll 3 made requests %v and published %d; want one request, none new", requests, len(published))
+	}
+}
+
+// A 429 in the middle of a poll must be waited out on that page, not turned
+// into a failed poll that starts over from page one.
+func TestPollTelemetryWaitsOutRateLimit(t *testing.T) {
+	telemetryPageDelay = 0
+	rateLimitSlack = 0
+	defer func() { telemetryPageDelay = 6 * time.Second; rateLimitSlack = time.Second }()
+
+	at := time.Date(2026, 10, 22, 11, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	f := func(h string) string {
+		return `{"norad_cat_id":43880,"frame":"` + h + `","timestamp":"` + at + `","observation_id":1,"station_id":1}`
+	}
+	hits := map[string]int{}
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits[r.URL.Path]++
+		switch r.URL.Path {
+		case "/p1":
+			w.Write([]byte(`{"next":"` + srv.URL + `/p2","results":[` + f("01") + `]}`))
+		case "/p2":
+			if hits["/p2"] == 1 { // limited the first time only
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			w.Write([]byte(`{"next":null,"results":[` + f("02") + `]}`))
+		}
+	}))
+	defer srv.Close()
+
+	var published []string
+	publish := func(_ context.Context, _ string, v any) error {
+		published = append(published, v.(TelemetryFrame).Frame)
+		return nil
+	}
+	var partial bool
+	err := pollTelemetry(context.Background(), publish, "TOK", srv.URL+"/p1", 10, map[string]bool{}, &partial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(published) != 2 || hits["/p1"] != 1 || hits["/p2"] != 2 {
+		t.Fatalf("published %v, hits %v; want both frames, page 1 read once, page 2 twice", published, hits)
 	}
 }

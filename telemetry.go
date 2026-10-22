@@ -36,7 +36,11 @@ func telemetryURL(norad int) string {
 func fetchTelemetryPage(ctx context.Context, url, token string) (frames []TelemetryFrame, next string, err error) {
 	defer func() {
 		outcome := "ok"
-		if err != nil {
+		var rl rateLimitError
+		switch {
+		case errors.As(err, &rl):
+			outcome = "rate_limited"
+		case err != nil:
 			outcome = "error"
 		}
 		apiRequests.WithLabelValues(outcome).Inc()
@@ -108,8 +112,12 @@ func pollTelemetry(ctx context.Context, publish publishFunc, token, url string, 
 	var got, sent int
 	pages := 0
 	for url != "" && pages < maxPages {
-		frames, next, err := fetchTelemetryPage(ctx, url, token)
-		if err != nil {
+		var frames []TelemetryFrame
+		var next string
+		if err := retryRateLimited(ctx, func() (err error) {
+			frames, next, err = fetchTelemetryPage(ctx, url, token)
+			return err
+		}); err != nil {
 			return err
 		}
 		pages++
@@ -127,7 +135,7 @@ func pollTelemetry(ctx context.Context, publish publishFunc, token, url string, 
 		}
 		url = next
 		if url != "" {
-			if err := sleep(ctx, pageDelay); err != nil {
+			if err := sleep(ctx, telemetryPageDelay); err != nil {
 				return err
 			}
 		}
