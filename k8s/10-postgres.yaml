@@ -1,0 +1,58 @@
+# A StatefulSet, not a Deployment: it keeps its identity (postgres-0) and its
+# disk across restarts. The schema comes from the "schema" ConfigMap, which
+# deploy.sh creates from ../schema.sql so there is one copy of it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: satnogs
+spec:
+  selector: {app: postgres}
+  ports:
+    - {name: postgres, port: 5432}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: satnogs
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          env:
+            - {name: POSTGRES_USER, value: satnogs}
+            - {name: POSTGRES_DB, value: satnogs}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: pipeline, key: POSTGRES_PASSWORD}}
+            # A subdirectory: a fresh volume has a lost+found folder in its root.
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          ports:
+            - {name: postgres, containerPort: 5432}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "satnogs"]}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: schema, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
+      volumes:
+        - name: schema
+          configMap: {name: schema}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: {storage: 1Gi}

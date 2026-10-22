@@ -24,6 +24,9 @@ func fresh(obs []Observation, seen map[int]fingerprint) []Observation {
 	return out
 }
 
+// retryAfterFailure is how long fetch waits after a failed poll.
+const retryAfterFailure = 30 * time.Second
+
 // runFetch polls the API every interval and publishes what is new to the
 // queue. It knows nothing about the database; storing is the other program's
 // job.
@@ -42,12 +45,15 @@ func runFetch(ctx context.Context, amqpURL string, interval time.Duration, norad
 		if interval == 0 {
 			return err
 		}
+		wait := interval
 		if err != nil && ctx.Err() == nil {
 			// One bad poll (API down, broker restarting) must not stop the
-			// service: log it and try again at the next tick.
-			log.Printf("poll failed, retrying in %s: %v", interval, err)
+			// service. Retry soon rather than after a whole interval: at
+			// startup a dependency is often just a few seconds late.
+			wait = min(interval, retryAfterFailure)
+			log.Printf("poll failed, retrying in %s: %v", wait, err)
 		}
-		if sleep(ctx, interval) != nil {
+		if sleep(ctx, wait) != nil {
 			log.Print("shutting down")
 			return nil
 		}

@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: satnogs
+spec:
+  selector: {app: rabbitmq}
+  ports:
+    - {name: amqp, port: 5672}
+    - {name: management, port: 15672}
+    - {name: metrics, port: 15692}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: satnogs
+spec:
+  serviceName: rabbitmq
+  replicas: 1
+  selector:
+    matchLabels: {app: rabbitmq}
+  template:
+    metadata:
+      labels: {app: rabbitmq}
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4-management
+          envFrom:
+            - secretRef: {name: pipeline}
+          ports:
+            - {name: amqp, containerPort: 5672}
+            - {name: management, containerPort: 15672}
+            - {name: metrics, containerPort: 15692}
+          readinessProbe:
+            exec: {command: ["rabbitmq-diagnostics", "-q", "ping"]}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 768Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/rabbitmq}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: {storage: 1Gi}

@@ -1,0 +1,76 @@
+# fetch and store are Deployments: interchangeable pods, so replicas can be
+# changed freely. Nothing says "start after RabbitMQ is ready": Kubernetes
+# starts everything at once, and the programs retry until their dependencies
+# answer. That is what the reconnect code is for.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fetch
+  namespace: satnogs
+spec:
+  replicas: 1 # one fetcher is enough; a second would only repeat the first
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: fetch}
+  template:
+    metadata:
+      labels: {app: fetch}
+    spec:
+      containers:
+        - name: fetch
+          image: satnogs-pipeline:dev
+          args: ["fetch", "-interval", "5m"]
+          env:
+            - name: AMQP_URL
+              valueFrom: {secretKeyRef: {name: pipeline, key: AMQP_URL}}
+          ports:
+            - {name: metrics, containerPort: 9100}
+          livenessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store
+  namespace: satnogs
+spec:
+  replicas: 2 # competing consumers: RabbitMQ shares the queue between them
+  selector:
+    matchLabels: {app: store}
+  template:
+    metadata:
+      labels: {app: store}
+    spec:
+      containers:
+        - name: store
+          image: satnogs-pipeline:dev
+          args: ["store"]
+          env:
+            - name: DATABASE_URL
+              valueFrom: {secretKeyRef: {name: pipeline, key: DATABASE_URL}}
+            - name: AMQP_URL
+              valueFrom: {secretKeyRef: {name: pipeline, key: AMQP_URL}}
+          ports:
+            - {name: metrics, containerPort: 9100}
+          livenessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}

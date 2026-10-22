@@ -70,6 +70,22 @@ Prometheus evaluates the rules in `monitoring/alerts.yml` and hands firing alert
 
 A stopped program exposes no metrics, so "time since last poll" can't notice it; that is what ServiceDown (`up == 0`) is for.
 
+## Kubernetes
+
+`k8s/` runs PostgreSQL, RabbitMQ, `fetch` and `store` on a local [kind](https://kind.sigs.k8s.io/) cluster (Kubernetes inside Docker). Needs Docker, kind and kubectl.
+
+```sh
+k8s/deploy.sh                                   # create the cluster, build and load the image, apply k8s/
+kubectl --context kind-satnogs -n satnogs get pods
+kubectl --context kind-satnogs -n satnogs scale deploy/store --replicas=4
+kind delete cluster --name satnogs              # remove everything
+```
+
+- PostgreSQL and RabbitMQ are StatefulSets with a persistent volume each; `fetch` and `store` are Deployments (`store` runs 2 replicas that share the queue).
+- Nothing waits for anything: Kubernetes starts all pods at once and the programs retry until Postgres and RabbitMQ answer. `fetch` retries a failed poll after 30 seconds, not after a whole interval.
+- Checked on kind: deleting a `store` pod brings up a replacement, scaling `store` to 4 gives 4 consumers on the queue, deleting `postgres-0` keeps all rows.
+- Not in the cluster: Prometheus, Grafana and Alertmanager (the programs already serve `/metrics` on :9100), and any Ingress. Secrets are plain development values in `k8s/05-secrets.yaml`.
+
 ## Notes on the data
 
 - The API lists newest first, and for a busy satellite the first pages are all scheduled (future) passes, so requests carry a `start__lt=<now>` cutoff.
