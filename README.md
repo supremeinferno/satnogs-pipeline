@@ -112,6 +112,30 @@ kind delete cluster --name satnogs              # remove everything
 - Checked on kind: all 11 pods run without restarts, Prometheus scrapes all five targets and loads the 10 alert rules, Grafana shows the dashboard. Earlier: deleting a `store` pod brings up a replacement, scaling `store` to 4 gives 4 consumers, deleting `postgres-0` keeps all rows.
 - Not done: Prometheus and Grafana keep their data in the pod (lost on restart), no Ingress, the secrets are plain Kubernetes Secrets, and `scripts/chaos.sh` runs against Compose only.
 
+## Battery watch
+
+A battery that is discharging is only a problem if the satellite is in sunlight. In the Earth's shadow it has to discharge. So `watch` works out the lighting at each beacon: it takes the current element set (TLE) from CelesTrak, finds the satellite's position with the SGP4 propagator in `internal/sgp4`, finds the Sun with a low-precision series (`internal/orbit`), and tests whether the satellite is inside the Earth's shadow, modelled as a cylinder.
+
+**Checked against the real batteries** (89 UWE-4 beacons over 3.4 days, battery A, current in mA):
+
+| Lighting (from SGP4) | Readings | Charging (> 20) | Discharging (< -20) | Flat |
+|---|---|---|---|---|
+| Sunlight | 41 | 29 | 5 | 7 |
+| Shadow | 48 | **0** | 29 | 19 |
+
+In the shadow the battery was never charging. The 5 sunlit readings that discharge (-26 to -112 mA, at about 4.02 V) are not near the edge of the shadow (the nearest edge was 11 minutes away), so they are not errors of the model; most likely a load such as the radio. That is why one such reading is not an alert.
+
+| Rule | Fires when |
+|---|---|
+| Discharging in sunlight | the newest 3 sunlit readings of a battery are all below -50 mA and span at least 30 minutes (so the beacons of one pass count once). Never fires on the 3.4 days of real data. |
+| Low voltage | the newest reading is below 3500 mV (the lowest seen was 3732 mV) |
+| Telemetry stale | no beacon stored for 12 hours (the largest gap seen was 7.7 hours) |
+| Orbit data stale | the TLE is more than 10 days old; the sunlight rule is then switched off |
+
+**Tested with made-up readings** in the database: three readings in the shadow at -300 mA (what a plain "current is negative" rule would flag) raised nothing; three readings in sunlight at -120 mA raised `BatteryDischargingInSunlight` for both batteries, delivered to Telegram, and the alert resolved when the readings were removed.
+
+Limits: the shadow is a cylinder, not the real cone with penumbra, which matters only for the few seconds around entering or leaving it. The TLE can be days old; its position error grows by about a kilometre a day, which moves the shadow edge by seconds. The SGP4 propagator and the TLE parser are [orbitscreen](https://github.com/supremeinferno/orbitscreen)'s `pkg/sgp4` and `pkg/tle`, imported as a Go module (verified there against Vallado's reference set).
+
 ## Notes on the data
 
 - The API lists newest first, and for a busy satellite the first pages are all scheduled (future) passes, so requests carry a `start__lt=<now>` cutoff.
