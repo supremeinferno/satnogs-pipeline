@@ -34,6 +34,11 @@ func runFetch(ctx context.Context, amqpURL string, interval time.Duration, norad
 
 	for {
 		err := poll(ctx, pub, observationsURL(norad, time.Now()), maxPages, seen)
+		if err == nil {
+			lastPoll.SetToCurrentTime()
+		} else if ctx.Err() == nil {
+			pollFailures.Inc()
+		}
 		if interval == 0 {
 			return err
 		}

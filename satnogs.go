@@ -44,6 +44,13 @@ func observationsURL(norad int, before time.Time) string {
 // fetchPage reads one page of observations. next is the URL of the following
 // page, or "" on the last one.
 func fetchPage(ctx context.Context, url string) (obs []Observation, next string, err error) {
+	defer func() {
+		outcome := "ok"
+		if err != nil {
+			outcome = "error"
+		}
+		apiRequests.WithLabelValues(outcome).Inc()
+	}()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, "", err

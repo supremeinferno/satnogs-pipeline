@@ -20,8 +20,20 @@ func runStore(ctx context.Context, dsn, amqpURL string) error {
 	defer pool.Close()
 
 	handle := func(ctx context.Context, o Observation) error {
-		_, err := save(ctx, pool, []Observation{o})
-		return err
+		start := time.Now()
+		changed, err := save(ctx, pool, []Observation{o})
+		if err != nil {
+			stored.WithLabelValues("failed").Inc()
+			return err
+		}
+		storeSeconds.Observe(time.Since(start).Seconds())
+		if changed == 0 {
+			stored.WithLabelValues("unchanged").Inc()
+			return nil
+		}
+		stored.WithLabelValues("stored").Inc()
+		ingestDelay.Observe(time.Since(o.End).Seconds())
+		return nil
 	}
 	for ctx.Err() == nil {
 		if err := consume(ctx, amqpURL, handle); err != nil && ctx.Err() == nil {

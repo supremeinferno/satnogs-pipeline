@@ -24,7 +24,7 @@ Two programs in one binary, so a slow or dead database never stops the fetching,
 Needs Docker. Go 1.26+ is needed only for development.
 
 ```sh
-docker compose up -d --build         # PostgreSQL, RabbitMQ, fetch (every 5 minutes) and store
+docker compose up -d --build         # PostgreSQL, RabbitMQ, fetch (every 5 minutes), store, Prometheus, Grafana
 docker compose logs -f fetch store
 docker compose down                  # stop; add -v to also delete the data
 ```
@@ -39,6 +39,21 @@ go test ./...
 ```
 
 `fetch` flags: `-interval` (0 = once), `-norad` (satellite catalog number, 0 = all; default 25544, the ISS), `-max-pages` (25 observations per page). Connections come from `DATABASE_URL` and `AMQP_URL`, defaulting to the ones in `docker-compose.yml`. The RabbitMQ management UI is at http://localhost:15672 (user and password `satnogs`).
+
+## Monitoring
+
+Both programs serve Prometheus metrics on `:9100/metrics`. `docker compose up` also starts Prometheus (http://localhost:9090) and Grafana (http://localhost:3000, no login, local use only) with a ready dashboard, *SatNOGS pipeline*:
+
+| Panel | What it tells you |
+|---|---|
+| Queue depth | Messages waiting for `store`. Rises when `store` is slow or stopped, drains when it catches up. |
+| Dead queue | Messages that could never be stored. Should stay at 0. |
+| Published / handled per second | Throughput of `fetch` and `store`, the latter split into stored, unchanged, rejected and failed. |
+| Time since last successful poll | Should never be far above the poll interval. The thing to alert on. |
+| SatNOGS API requests | Successes and errors. |
+| Write to Postgres p95, pass end to stored p95 | Latency of the database write, and how long after a pass ended it reached the database (mostly ground stations uploading late). |
+
+Counters are per process and restart from zero. The first poll after an empty start backfills a day or more of passes, which inflates the "pass end to stored" delay until real traffic dominates it.
 
 ## Notes on the data
 

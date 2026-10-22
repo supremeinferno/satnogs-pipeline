@@ -97,6 +97,7 @@ func (p *publisher) publish(ctx context.Context, o Observation) error {
 	if !acked {
 		return fmt.Errorf("broker refused observation %d", o.ID)
 	}
+	published.Inc()
 	return nil
 }
 
@@ -158,6 +159,7 @@ func consume(ctx context.Context, url string, handle func(context.Context, Obser
 			}
 			if err != nil {
 				log.Printf("rejecting message to dead queue: %v: %.120s", err, m.Body)
+				stored.WithLabelValues("rejected").Inc()
 				if err := m.Nack(false, false); err != nil {
 					return err
 				}

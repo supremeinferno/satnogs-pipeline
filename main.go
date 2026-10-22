@@ -27,6 +27,7 @@ func main() {
 	interval := fs.Duration("interval", 5*time.Minute, "fetch: time between polls; 0 = poll once and exit")
 	norad := fs.Int("norad", 25544, "fetch: only this satellite (0 = all)")
 	maxPages := fs.Int("max-pages", 10, "fetch: most pages (25 observations each) to read per poll")
+	metricsAddr := fs.String("metrics", ":9100", "address for the Prometheus /metrics endpoint")
 	fs.Parse(os.Args[2:])
 
 	dsn := env("DATABASE_URL", "postgres://satnogs:satnogs@localhost:5432/satnogs") // docker-compose.yml
@@ -36,6 +37,8 @@ func main() {
 	// stops any request, query or wait in flight.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	serveMetrics(ctx, *metricsAddr)
 
 	var err error
 	switch cmd {
