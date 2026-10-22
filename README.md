@@ -35,7 +35,7 @@ All measured on real UWE-4 data, 17 to 22 October 2026 (137 beacons over 5.1 day
 | Lighting model against the batteries | In the shadow, **0 of 60** beacons were charging. In sunlight, 61 of 77 were. |
 | Battery rule on the same history | Replayed at each of the 137 readings, "discharging in sunlight" and "low voltage" never fired. |
 | Same rule on made-up readings | Three in the shadow at -300 mA (what "current is negative" would flag): no alert. Three in sunlight at -120 mA: alert, delivered to Telegram, resolved when removed. |
-| Failure tests ([`scripts/chaos.sh`](scripts/chaos.sh)) | 6 breakages, 20 checks, about 30 seconds: store down, RabbitMQ restart, PostgreSQL down, duplicates, a message that is not JSON. |
+| Failure tests ([`scripts/chaos.sh`](scripts/chaos.sh)) | 6 breakages, 20 checks, 30 to 45 seconds, on Docker Compose and on Kubernetes: store down, RabbitMQ restart, PostgreSQL down, duplicates, a message that is not JSON. |
 | CI | gofmt, vet, tests with the race detector, `go.mod`, shell scripts, Prometheus and Alertmanager configuration, Docker image. |
 | Kubernetes (kind) | 11 pods running without restarts, 5 Prometheus targets up, 10 alert rules loaded. |
 
@@ -94,11 +94,14 @@ go test ./...
 6. a message that is not JSON goes to the dead queue, and the good messages behind it are still stored.
 
 ```sh
-scripts/chaos.sh              # about 30 seconds once the images are built
-scripts/chaos.sh --no-build
+scripts/chaos.sh              # Docker Compose, about 30 seconds once the images are built
+scripts/chaos.sh --no-build   # ...without rebuilding the images
+scripts/chaos.sh --k8s        # the kind cluster from k8s/deploy.sh, about 45 seconds
 ```
 
-It exits non-zero if a check fails and removes its own rows. To see it fail, drop the primary key of `observations`: the script stops at step 1.
+On Kubernetes "store down" is `kubectl scale` to 0 and back to 2, "RabbitMQ restart" is a rollout restart of its pod, and "PostgreSQL down" scales its StatefulSet to 0 and back (its volume stays). The script puts `store` back to the replicas it found.
+
+It exits non-zero if a check fails and removes its own rows. To see it fail, drop the primary key of `observations`: the script stops at step 1. Doing exactly that showed a bug in the script's own cleanup: it purged the queue while `store` was still running, and messages `store` held unacknowledged went back to the queue afterwards. Cleanup now stops `store` first.
 
 ## Monitoring
 
@@ -147,7 +150,7 @@ kind delete cluster --name satnogs              # remove everything
 - Nothing waits for anything: Kubernetes starts all pods at once and the programs retry until their dependencies answer. `fetch` retries a failed poll after 30 seconds, not after a whole interval.
 - The Services are named as in Compose (`fetch`, `store`, `notify`, ...), so `monitoring/prometheus.yml` and `monitoring/alertmanager.yml` work unchanged in both; `deploy.sh` makes them into ConfigMaps.
 - Checked on kind: all 11 pods run without restarts, Prometheus scrapes all five targets and loads the 10 alert rules, Grafana shows the dashboard. Earlier: deleting a `store` pod brings up a replacement, scaling `store` to 4 gives 4 consumers, deleting `postgres-0` keeps all rows.
-- Not done: Prometheus and Grafana keep their data in the pod (lost on restart), no Ingress, the secrets are plain Kubernetes Secrets, and `scripts/chaos.sh` runs against Compose only.
+- Not done: Prometheus and Grafana keep their data in the pod (lost on restart), no Ingress, the secrets are plain Kubernetes Secrets.
 
 ## Battery watch
 
