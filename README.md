@@ -45,6 +45,24 @@ go test ./...
 
 `fetch` flags: `-interval` (0 = once), `-norad` (satellite catalog number, 0 = all; default 25544, the ISS), `-max-pages` (25 observations per page). Connections come from `DATABASE_URL` and `AMQP_URL`, defaulting to the ones in `docker-compose.yml`. The RabbitMQ management UI is at http://localhost:15672 (user and password `satnogs`).
 
+## Failure tests
+
+`scripts/chaos.sh` breaks the pipeline on purpose and checks that it recovers. It starts PostgreSQL, RabbitMQ and `store`, feeds made-up observations straight into the queue (the SatNOGS API is not called), and checks the database and the queues after each break:
+
+1. normal operation: 5 observations reach the database;
+2. `store` stopped: 20 messages wait in the queue and nothing is stored, then all are stored once it is back;
+3. the same observations again: no duplicate rows;
+4. RabbitMQ restarted: `store` reconnects by itself and stores new messages;
+5. PostgreSQL stopped: messages stay in the queue, and all are stored when it is back;
+6. a message that is not JSON goes to the dead queue, and the good messages behind it are still stored.
+
+```sh
+scripts/chaos.sh              # about 30 seconds once the images are built
+scripts/chaos.sh --no-build
+```
+
+It exits non-zero if a check fails and removes its own rows. To see it fail, drop the primary key of `observations`: the script stops at step 1.
+
 ## Monitoring
 
 Both programs serve Prometheus metrics on `:9100/metrics`. `docker compose up` also starts Prometheus (http://localhost:9090) and Grafana (http://localhost:3000, no login, local use only) with a ready dashboard, *SatNOGS pipeline*:
