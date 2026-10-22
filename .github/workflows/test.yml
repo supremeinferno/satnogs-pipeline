@@ -1,0 +1,53 @@
+# On every push and pull request: format, vet, tests with the race detector,
+# go.mod tidiness, the shell scripts' syntax, the Prometheus and Alertmanager
+# configuration, and that the Docker image builds.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - name: go.mod is tidy
+        run: go mod tidy -diff
+      - run: go test -race ./...
+
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shell scripts parse
+        run: |
+          for f in scripts/chaos.sh k8s/deploy.sh; do bash -n "$f"; done
+      - name: Prometheus configuration and alert rules
+        run: >
+          docker run --rm -v "$PWD/monitoring:/etc/prometheus:ro"
+          --entrypoint promtool prom/prometheus:v3.5.0
+          check config /etc/prometheus/prometheus.yml
+      - name: Alertmanager configuration
+        run: >
+          docker run --rm -v "$PWD/monitoring:/etc/alertmanager:ro"
+          --entrypoint amtool prom/alertmanager:v0.28.1
+          check-config /etc/alertmanager/alertmanager.yml
+      - name: docker-compose.yml is valid
+        run: docker compose config -q
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t satnogs-pipeline:ci .
