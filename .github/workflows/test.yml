@@ -36,7 +36,7 @@ jobs:
       - name: Prometheus configuration and alert rules
         run: >
           docker run --rm -v "$PWD/monitoring:/etc/prometheus:ro"
-          --entrypoint promtool prom/prometheus:v3.5.0
+          --entrypoint promtool prom/prometheus:v3.15.0
           check config /etc/prometheus/prometheus.yml
       - name: Alertmanager configuration
         run: >
