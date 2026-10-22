@@ -49,7 +49,7 @@ func main() {
 	case "store":
 		err = runStore(ctx, dsn, amqpURL)
 	case "notify":
-		err = runNotify(ctx, *listen)
+		err = runNotify(ctx, *listen, os.Getenv("TELEGRAM_TOKEN"), os.Getenv("TELEGRAM_CHAT_ID"))
 	}
 	if err != nil {
 		log.Fatal(err)

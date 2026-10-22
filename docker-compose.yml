@@ -60,6 +60,10 @@ services:
   notify:
     build: .
     command: ["notify"]
+    environment:
+      # Read from .env next to this file (git-ignored). Without them, alerts are only logged.
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
     restart: unless-stopped
 
   alertmanager:

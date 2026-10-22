@@ -57,7 +57,7 @@ Counters are per process and restart from zero. The first poll after an empty st
 
 ## Alerts
 
-Prometheus evaluates the rules in `monitoring/alerts.yml` and hands firing alerts to Alertmanager (http://localhost:9093), which posts them to the `notify` service. Today `notify` only logs one line per alert (`docker compose logs notify`); `alertHandler` in `notify.go` is where a Telegram or e-mail message would be sent.
+Prometheus evaluates the rules in `monitoring/alerts.yml` and hands firing alerts to Alertmanager (http://localhost:9093), which posts them to the `notify` service. `notify` logs one line per alert (`docker compose logs notify`) and, when `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID` are set in a git-ignored `.env` file, sends it to a Telegram chat. If delivery fails it answers 502 so Alertmanager sends the batch again. The bot token is part of Telegram's request URL, so errors are scrubbed before they reach the logs.
 
 | Alert | Fires when |
 |---|---|

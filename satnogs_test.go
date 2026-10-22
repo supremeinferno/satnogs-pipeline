@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -107,7 +109,7 @@ func TestValidate(t *testing.T) {
 
 func TestAlertHandler(t *testing.T) {
 	var lines []string
-	h := alertHandler(func(f string, a ...any) { lines = append(lines, fmt.Sprintf(f, a...)) })
+	h := alertHandler(func(f string, a ...any) { lines = append(lines, fmt.Sprintf(f, a...)) }, nil)
 
 	body := `{"alerts":[
 		{"status":"firing","labels":{"alertname":"DeadQueueNotEmpty","severity":"warning"},"annotations":{"summary":"2 message(s) in the dead queue"}},
@@ -134,5 +136,60 @@ func TestAlertHandler(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/alert", nil))
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET: status %d, want 405", rec.Code)
+	}
+}
+
+func TestTelegramNotify(t *testing.T) {
+	var path, chat, text string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		path, chat, text = r.URL.Path, r.PostForm.Get("chat_id"), r.PostForm.Get("text")
+	}))
+	defer srv.Close()
+
+	tg := newTelegram("SECRET123", "42")
+	tg.base = srv.URL
+	if err := tg.Notify(context.Background(), "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if path != "/botSECRET123/sendMessage" || chat != "42" || text != "hello" {
+		t.Fatalf("got path %q chat %q text %q", path, chat, text)
+	}
+}
+
+func TestTelegramErrorHidesToken(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	base := srv.URL
+	srv.Close() // nothing listens any more: the request fails with the URL in the error
+
+	tg := newTelegram("SECRET123", "42")
+	tg.base = base
+	err := tg.Notify(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if strings.Contains(err.Error(), "SECRET123") {
+		t.Fatalf("error leaks the token: %v", err)
+	}
+}
+
+type failingNotifier struct{}
+
+func (failingNotifier) Notify(context.Context, string) error { return errors.New("down") }
+
+func TestAlertHandlerDeliveryFailure(t *testing.T) {
+	h := alertHandler(func(string, ...any) {}, failingNotifier{})
+	body := `{"alerts":[{"status":"firing","labels":{"alertname":"X"},"annotations":{}}]}`
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/alert", strings.NewReader(body)))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status %d, want 502 so Alertmanager retries", rec.Code)
+	}
+}
+
+func TestFormatAlert(t *testing.T) {
+	got := formatAlert("resolved", "ServiceDown", "critical", "store is down")
+	if want := "✅ RESOLVED: ServiceDown [critical]\nstore is down"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
