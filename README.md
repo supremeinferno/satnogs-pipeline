@@ -1,26 +1,63 @@
 # satnogs-pipeline
 
-A small backend that collects satellite observations from the [SatNOGS Network](https://network.satnogs.org/) and stores them in PostgreSQL. SatNOGS is a worldwide network of volunteer ground stations; each *observation* is one station listening to one satellite during one pass.
+Reads the radio telemetry of a real CubeSat ([UWE-4](https://en.wikipedia.org/wiki/UWE-4), University of Würzburg) from volunteer ground stations, decodes it, stores it, and raises an alert when a battery misbehaves. The alert knows whether the satellite is in sunlight or in the Earth's shadow, because a battery is supposed to discharge in the shadow.
 
-Work in progress. The goal is a telemetry pipeline (fetch, decode, queue, store, alert) in the spirit of a small mission control.
+![Battery A current of UWE-4 by lighting: 0 of 60 beacons in the Earth's shadow are charging, 61 of 77 in sunlight are](docs/img/battery-current.svg)
+
+The data comes from [SatNOGS](https://satnogs.org/), a worldwide network of volunteer ground stations. The lighting is worked out with the SGP4 orbit model from [orbitscreen](https://github.com/supremeinferno/orbitscreen) and the Sun's position, not read from the battery, which is what makes the picture above a check and not a circle.
+
+## What it does
+
+```mermaid
+flowchart LR
+  NET[SatNOGS Network API] --> F[fetch]
+  DB[SatNOGS DB telemetry API] --> FT[fetch-telemetry]
+  F --> Q1[(observations queue)]
+  FT --> Q2[(telemetry queue)]
+  Q1 --> S[store]
+  Q2 --> S
+  S --> PG[(PostgreSQL)]
+  Q1 -.-> D1[(dead queue)]
+  Q2 -.-> D2[(dead queue)]
+  PG --> W[watch]
+  CT[CelesTrak: orbit data] --> W
+  F & FT & S & W --> PR[Prometheus]
+  PR --> AM[Alertmanager] --> N[notify] --> TG[Telegram]
+  PR --> GR[Grafana]
+```
+
+## Results
+
+All measured on real UWE-4 data, 17 to 22 October 2026 (137 beacons over 5.1 days), unless it says otherwise.
+
+| | |
+|---|---|
+| Lighting model against the batteries | In the shadow, **0 of 60** beacons were charging. In sunlight, 61 of 77 were. |
+| Battery rule on the same history | Replayed at each of the 137 readings, "discharging in sunlight" and "low voltage" never fired. |
+| Same rule on made-up readings | Three in the shadow at -300 mA (what "current is negative" would flag): no alert. Three in sunlight at -120 mA: alert, delivered to Telegram, resolved when removed. |
+| Failure tests ([`scripts/chaos.sh`](scripts/chaos.sh)) | 6 breakages, 20 checks, about 30 seconds: store down, RabbitMQ restart, PostgreSQL down, duplicates, a message that is not JSON. |
+| CI | gofmt, vet, tests with the race detector, `go.mod`, shell scripts, Prometheus and Alertmanager configuration, Docker image. |
+| Kubernetes (kind) | 11 pods running without restarts, 5 Prometheus targets up, 10 alert rules loaded. |
+
+## Where the real data corrected me
+
+- The SatNOGS API's `status` filter still returns passes that have not happened yet, and for a busy satellite the first 140 results are all in the future. Filtering is done here, with a time cutoff.
+- 38 of the first 72 telemetry frames have `observation_id` 0 (not uploaded through SatNOGS Network). I had treated that as invalid and sent good frames to the dead queue. They are stored with a NULL observation now.
+- The telemetry API answers 429 every eight to ten seconds. A poll that failed on it started over from the first page and never finished. It now waits out the 429 on the same page.
+- Most satellites' frames are no use: Morse code and APRS text carry no battery data. 75 satellites were scanned (slowly, because of that rate limit) to find one with a binary, documented beacon.
+- One beacon with the battery discharging in sunlight is not an anomaly: 8 of 77 sunlit beacons do it, for a few tens of mA. The rule asks for three, 30 minutes apart.
 
 ## How it fits together
 
-```
-SatNOGS Network API ---> fetch ------------> observations queue --+
-                                                                   +--> store --> PostgreSQL
-SatNOGS DB telemetry API --> fetch-telemetry --> telemetry queue --+
-                                  (each queue has a dead queue for messages that can never be stored)
-```
-
-Four programs in one binary, so a slow or dead database never stops the fetching, and the other way round.
+Five programs in one binary, so that a slow or dead part never stops the others:
 
 - `fetch` polls the observations API on an interval, follows its pagination, skips passes that haven't happened yet, and publishes each new or changed observation. It waits for the broker's confirmation (publisher confirms) before counting a message as sent.
 - `store` reads the queue and writes to Postgres. A message is acknowledged only after it is saved, so a crash loses nothing; an undecodable or invalid message goes to the dead queue instead of blocking the rest.
 - `fetch-telemetry` reads raw radio frames of one satellite (UWE-4, NORAD 43880) from the SatNOGS DB API, which needs an account token (`SATNOGS_DB_TOKEN` in `.env`), and respects its rate limit (HTTP 429, `Retry-After`). `store` decodes each frame into battery voltage, current, temperature and charge ([uwe4.go](uwe4.go)), checks the frame's checksum, and keeps one row per distinct frame: the same beacon heard by two ground stations is stored once. Frames that are not beacons or arrive damaged are counted and dropped; only frames that can never work (bad JSON, an unknown satellite) go to the dead queue.
 - `watch` applies battery rules that know whether the satellite is in sunlight (see [Battery watch](#battery-watch)) and exports the result as metrics.
+- `notify` receives Alertmanager's webhook and sends each alert to Telegram (see [Alerts](#alerts)).
 - Running any of them twice never duplicates a row; a row is updated only when its status or frame count changed.
-- Both survive their dependencies going down (API, broker, database) and shut down cleanly on Ctrl-C or SIGTERM.
+- All of them survive their dependencies going down (API, broker, database) and shut down cleanly on Ctrl-C or SIGTERM.
 
 ## Run it
 
@@ -116,18 +153,18 @@ kind delete cluster --name satnogs              # remove everything
 
 A battery that is discharging is only a problem if the satellite is in sunlight. In the Earth's shadow it has to discharge. So `watch` works out the lighting at each beacon: it takes the current element set (TLE) from CelesTrak, finds the satellite's position with the SGP4 propagator in `internal/sgp4`, finds the Sun with a low-precision series (`internal/orbit`), and tests whether the satellite is inside the Earth's shadow, modelled as a cylinder.
 
-**Checked against the real batteries** (89 UWE-4 beacons over 3.4 days, battery A, current in mA):
+**Checked against the real batteries** (137 UWE-4 beacons over 5.1 days, battery A; `go run ./cmd/plotbattery` redraws the figure at the top and prints the numbers below from the database):
 
 | Lighting (from SGP4) | Readings | Charging (> 20) | Discharging (< -20) | Flat |
 |---|---|---|---|---|
-| Sunlight | 41 | 29 | 5 | 7 |
-| Shadow | 48 | **0** | 29 | 19 |
+| Sunlight | 77 | 61 | 8 | 8 |
+| Shadow | 60 | **0** | 37 | 23 |
 
-In the shadow the battery was never charging. The 5 sunlit readings that discharge (-26 to -112 mA, at about 4.02 V) are not near the edge of the shadow (the nearest edge was 11 minutes away), so they are not errors of the model; most likely a load such as the radio. That is why one such reading is not an alert.
+In the shadow the battery was never charging. The 8 sunlit readings that discharge (-26 to -162 mA) are not near the edge of the shadow (the nearest edge is at least 10 minutes 45 seconds away), so they are not errors of the model; most likely a load such as the radio. That is why one such reading is not an alert. "Flat" means within 20 mA of zero.
 
 | Rule | Fires when |
 |---|---|
-| Discharging in sunlight | the newest 3 sunlit readings of a battery are all below -50 mA and span at least 30 minutes (so the beacons of one pass count once). Never fires on the 3.4 days of real data. |
+| Discharging in sunlight | the newest 3 sunlit readings of a battery are all below -50 mA and span at least 30 minutes (so the beacons of one pass count once). Replayed at each of the 137 readings, it never fires. |
 | Low voltage | the newest reading is below 3500 mV (the lowest seen was 3732 mV) |
 | Telemetry stale | no beacon stored for 12 hours (the largest gap seen was 7.7 hours) |
 | Orbit data stale | the TLE is more than 10 days old; the sunlight rule is then switched off |
