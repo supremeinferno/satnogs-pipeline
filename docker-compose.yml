@@ -10,6 +10,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "satnogs"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -21,6 +26,36 @@ services:
       - "15672:15672" # management UI: http://localhost:15672
     volumes:
       - rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Inside the compose network, services reach each other by service name
+  # (postgres, rabbitmq), not localhost.
+  fetch:
+    build: .
+    command: ["fetch", "-interval", "5m"]
+    environment:
+      AMQP_URL: amqp://satnogs:satnogs@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  store:
+    build: .
+    command: ["store"]
+    environment:
+      DATABASE_URL: postgres://satnogs:satnogs@postgres:5432/satnogs
+      AMQP_URL: amqp://satnogs:satnogs@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

@@ -21,13 +21,20 @@ Two programs in one binary, so a slow or dead database never stops the fetching,
 
 ## Run it
 
-Needs Go 1.26+ and Docker.
+Needs Docker. Go 1.26+ is needed only for development.
 
 ```sh
-docker compose up -d                 # PostgreSQL (schema applied) and RabbitMQ
+docker compose up -d --build         # PostgreSQL, RabbitMQ, fetch (every 5 minutes) and store
+docker compose logs -f fetch store
+docker compose down                  # stop; add -v to also delete the data
+```
+
+For development, run only the infrastructure in Docker and the programs from source:
+
+```sh
+docker compose up -d postgres rabbitmq
 go run . store                       # terminal 1: queue -> Postgres
 go run . fetch -interval 0           # terminal 2: poll once and exit
-go run . fetch -interval 5m          # ...or poll every 5 minutes
 go test ./...
 ```
 
