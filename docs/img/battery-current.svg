@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 470" role="img" aria-labelledby="t d">
+<title id="t">UWE-4 battery A current, by lighting</title>
+<desc id="d">137 beacons over 5.1 days. Of 60 in the Earth's shadow, 0 were charging and 37 discharging. Of 77 in sunlight, 61 were charging and 8 discharging.</desc>
+<style>
+ svg{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+ .bg{fill:#fcfcfb}.shadow{fill:#e4e3de}.grid{stroke:#e4e3de;stroke-width:1}.zero{stroke:#8a8983;stroke-width:1.5;stroke-dasharray:5 4}
+ .ink{fill:#0b0b0b}.muted{fill:#52514e}.dot{fill:#2a78d6;stroke:#fcfcfb;stroke-width:2}.ring{fill:none;stroke:#eb6834;stroke-width:2.5}
+ @media (prefers-color-scheme:dark){.bg{fill:#1a1a19}.shadow{fill:#2b2b29}.grid{stroke:#333331}.zero{stroke:#8f8e86}
+  .ink{fill:#f0efec}.muted{fill:#c3c2b7}.dot{fill:#3987e5;stroke:#1a1a19}.ring{stroke:#d95926}}
+</style>
+<rect class="bg" width="760" height="470" rx="6"/>
+<text class="ink" x="64" y="30" font-size="18" font-weight="600">UWE-4 battery A: it charges in sunlight, not in the Earth's shadow</text>
+<text class="muted" x="64" y="52" font-size="13">137 beacons heard by SatNOGS ground stations over 5.1 days, 17 Oct to 22 Oct UTC.</text>
+<text class="muted" x="64" y="70" font-size="13">Lighting at each beacon comes from SGP4 and the Sun's position, not from the battery.</text>
+<rect class="shadow" x="64" y="96" width="336.0" height="302.0"/>
+<line class="grid" x1="64" x2="736" y1="398.0" y2="398.0"/>
+<line class="grid" x1="64" x2="736" y1="305.1" y2="305.1"/>
+<line class="grid" x1="64" x2="736" y1="119.2" y2="119.2"/>
+<text class="muted" x="56" y="402.0" font-size="12" text-anchor="end">-400</text>
+<text class="muted" x="56" y="309.1" font-size="12" text-anchor="end">-200</text>
+<text class="muted" x="56" y="216.2" font-size="12" text-anchor="end">0</text>
+<text class="muted" x="56" y="123.2" font-size="12" text-anchor="end">+200</text>
+<line class="zero" x1="64" x2="736" y1="212.2" y2="212.2"/>
+<text class="muted" x="18" y="247" font-size="12" transform="rotate(-90 18 247)" text-anchor="middle">current, mA  (+ charging, − discharging)</text>
+<circle class="dot" cx="323.2" cy="307.9" r="4.5"><title>17 Oct 09:18 UTC, in the shadow: -206 mA</title></circle>
+<circle class="dot" cx="321.5" cy="213.1" r="4.5"><title>17 Oct 09:19 UTC, in the shadow: -2 mA</title></circle>
+<circle class="dot" cx="447.9" cy="162.0" r="4.5"><title>17 Oct 12:02 UTC, in sunlight: 108 mA</title></circle>
+<circle class="dot" cx="446.2" cy="150.8" r="4.5"><title>17 Oct 12:03 UTC, in sunlight: 132 mA</title></circle>
+<circle class="dot" cx="444.5" cy="168.0" r="4.5"><title>17 Oct 12:04 UTC, in sunlight: 95 mA</title></circle>
+<circle class="dot" cx="499.2" cy="177.3" r="4.5"><title>17 Oct 13:31 UTC, in sunlight: 75 mA</title></circle>
+<circle class="dot" cx="694.0" cy="197.8" r="4.5"><title>17 Oct 13:35 UTC, in sunlight: 31 mA</title></circle>
+<circle class="dot" cx="565.8" cy="176.8" r="4.5"><title>17 Oct 18:09 UTC, in sunlight: 76 mA</title></circle>
+<circle class="dot" cx="631.3" cy="138.7" r="4.5"><title>17 Oct 18:10 UTC, in sunlight: 158 mA</title></circle>
+<circle class="dot" cx="146.5" cy="277.2" r="4.5"><title>17 Oct 20:17 UTC, in the shadow: -140 mA</title></circle>
+<circle class="dot" cx="100.3" cy="275.3" r="4.5"><title>18 Oct 00:42 UTC, in the shadow: -136 mA</title></circle>
+<circle class="dot" cx="165.9" cy="309.3" r="4.5"><title>18 Oct 00:43 UTC, in the shadow: -209 mA</title></circle>
+<circle class="dot" cx="228.0" cy="275.3" r="4.5"><title>18 Oct 00:46 UTC, in the shadow: -136 mA</title></circle>
+<circle class="dot" cx="226.3" cy="308.3" r="4.5"><title>18 Oct 00:47 UTC, in the shadow: -207 mA</title></circle>
+<circle class="dot" cx="618.4" cy="142.0" r="4.5"><title>18 Oct 04:51 UTC, in sunlight: 151 mA</title></circle>
+<circle class="dot" cx="608.4" cy="167.6" r="4.5"><title>18 Oct 04:57 UTC, in sunlight: 96 mA</title></circle>
+<circle class="dot" cx="472.3" cy="135.5" r="4.5"><title>18 Oct 04:58 UTC, in sunlight: 165 mA</title></circle>
+<circle class="dot" cx="264.6" cy="322.7" r="4.5"><title>18 Oct 07:01 UTC, in the shadow: -238 mA</title></circle>
+<circle class="dot" cx="571.5" cy="177.3" r="4.5"><title>18 Oct 07:58 UTC, in sunlight: 75 mA</title></circle>
+<circle class="ring" cx="569.8" cy="287.4" r="9"/>
+<circle class="dot" cx="569.8" cy="287.4" r="4.5"><title>18 Oct 07:59 UTC, in sunlight: -162 mA</title></circle>
+<circle class="dot" cx="227.5" cy="213.1" r="4.5"><title>18 Oct 10:01 UTC, in the shadow: -2 mA</title></circle>
+<circle class="dot" cx="293.1" cy="212.6" r="4.5"><title>18 Oct 10:02 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="512.6" cy="142.5" r="4.5"><title>18 Oct 11:11 UTC, in sunlight: 150 mA</title></circle>
+<circle class="dot" cx="510.9" cy="153.1" r="4.5"><title>18 Oct 11:12 UTC, in sunlight: 127 mA</title></circle>
+<circle class="dot" cx="509.2" cy="152.2" r="4.5"><title>18 Oct 11:13 UTC, in sunlight: 129 mA</title></circle>
+<circle class="dot" cx="574.8" cy="142.5" r="4.5"><title>18 Oct 11:14 UTC, in sunlight: 150 mA</title></circle>
+<circle class="dot" cx="573.3" cy="172.7" r="4.5"><title>18 Oct 11:15 UTC, in sunlight: 85 mA</title></circle>
+<circle class="dot" cx="571.4" cy="150.4" r="4.5"><title>18 Oct 11:16 UTC, in sunlight: 133 mA</title></circle>
+<circle class="dot" cx="562.2" cy="176.4" r="4.5"><title>18 Oct 12:40 UTC, in sunlight: 77 mA</title></circle>
+<circle class="dot" cx="627.8" cy="142.9" r="4.5"><title>18 Oct 12:41 UTC, in sunlight: 149 mA</title></circle>
+<circle class="dot" cx="626.1" cy="148.0" r="4.5"><title>18 Oct 12:42 UTC, in sunlight: 138 mA</title></circle>
+<circle class="dot" cx="688.2" cy="162.4" r="4.5"><title>18 Oct 12:45 UTC, in sunlight: 107 mA</title></circle>
+<circle class="dot" cx="686.5" cy="145.2" r="4.5"><title>18 Oct 12:46 UTC, in sunlight: 144 mA</title></circle>
+<circle class="dot" cx="483.3" cy="179.6" r="4.5"><title>18 Oct 12:47 UTC, in sunlight: 70 mA</title></circle>
+<circle class="dot" cx="481.6" cy="162.0" r="4.5"><title>18 Oct 12:48 UTC, in sunlight: 108 mA</title></circle>
+<circle class="dot" cx="533.7" cy="198.2" r="4.5"><title>18 Oct 18:54 UTC, in sunlight: 30 mA</title></circle>
+<circle class="ring" cx="666.4" cy="248.4" r="9"/>
+<circle class="dot" cx="666.4" cy="248.4" r="4.5"><title>18 Oct 18:55 UTC, in sunlight: -78 mA</title></circle>
+<circle class="ring" cx="463.1" cy="230.3" r="9"/>
+<circle class="dot" cx="463.1" cy="230.3" r="4.5"><title>18 Oct 18:56 UTC, in sunlight: -39 mA</title></circle>
+<circle class="dot" cx="576.2" cy="212.6" r="4.5"><title>18 Oct 20:28 UTC, in sunlight: -1 mA</title></circle>
+<circle class="dot" cx="287.1" cy="284.6" r="4.5"><title>18 Oct 23:58 UTC, in the shadow: -156 mA</title></circle>
+<circle class="dot" cx="340.1" cy="212.6" r="4.5"><title>19 Oct 01:25 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="133.5" cy="212.6" r="4.5"><title>19 Oct 01:28 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="199.0" cy="375.2" r="4.5"><title>19 Oct 01:29 UTC, in the shadow: -351 mA</title></circle>
+<circle class="dot" cx="261.1" cy="309.3" r="4.5"><title>19 Oct 01:32 UTC, in the shadow: -209 mA</title></circle>
+<circle class="dot" cx="259.4" cy="324.1" r="4.5"><title>19 Oct 01:33 UTC, in the shadow: -241 mA</title></circle>
+<circle class="dot" cx="257.7" cy="278.6" r="4.5"><title>19 Oct 01:34 UTC, in the shadow: -143 mA</title></circle>
+<circle class="dot" cx="321.6" cy="277.2" r="4.5"><title>19 Oct 01:36 UTC, in the shadow: -140 mA</title></circle>
+<circle class="dot" cx="669.8" cy="149.0" r="4.5"><title>19 Oct 04:08 UTC, in sunlight: 136 mA</title></circle>
+<circle class="dot" cx="600.9" cy="142.5" r="4.5"><title>19 Oct 04:09 UTC, in sunlight: 150 mA</title></circle>
+<circle class="dot" cx="118.3" cy="278.1" r="4.5"><title>19 Oct 04:55 UTC, in the shadow: -142 mA</title></circle>
+<circle class="dot" cx="183.9" cy="307.4" r="4.5"><title>19 Oct 04:56 UTC, in the shadow: -205 mA</title></circle>
+<circle class="dot" cx="239.5" cy="212.2" r="4.5"><title>19 Oct 07:42 UTC, in the shadow: 0 mA</title></circle>
+<circle class="dot" cx="301.6" cy="212.6" r="4.5"><title>19 Oct 07:45 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="299.9" cy="212.6" r="4.5"><title>19 Oct 07:46 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="365.5" cy="212.6" r="4.5"><title>19 Oct 07:47 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="363.8" cy="212.6" r="4.5"><title>19 Oct 07:48 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="197.5" cy="212.6" r="4.5"><title>19 Oct 10:45 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="680.8" cy="220.1" r="4.5"><title>19 Oct 11:57 UTC, in sunlight: -17 mA</title></circle>
+<circle class="dot" cx="601.1" cy="137.8" r="4.5"><title>19 Oct 13:23 UTC, in sunlight: 160 mA</title></circle>
+<circle class="dot" cx="599.4" cy="144.8" r="4.5"><title>19 Oct 13:24 UTC, in sunlight: 145 mA</title></circle>
+<circle class="dot" cx="665.0" cy="125.7" r="4.5"><title>19 Oct 13:25 UTC, in sunlight: 186 mA</title></circle>
+<circle class="dot" cx="303.9" cy="303.7" r="4.5"><title>19 Oct 16:58 UTC, in the shadow: -197 mA</title></circle>
+<circle class="dot" cx="100.6" cy="284.6" r="4.5"><title>19 Oct 16:59 UTC, in the shadow: -156 mA</title></circle>
+<circle class="dot" cx="98.9" cy="322.3" r="4.5"><title>19 Oct 17:00 UTC, in the shadow: -237 mA</title></circle>
+<circle class="dot" cx="298.8" cy="284.2" r="4.5"><title>19 Oct 17:01 UTC, in the shadow: -155 mA</title></circle>
+<circle class="dot" cx="560.5" cy="208.0" r="4.5"><title>19 Oct 17:45 UTC, in sunlight: 9 mA</title></circle>
+<circle class="dot" cx="314.2" cy="349.7" r="4.5"><title>19 Oct 20:10 UTC, in the shadow: -296 mA</title></circle>
+<circle class="dot" cx="312.5" cy="278.1" r="4.5"><title>19 Oct 20:11 UTC, in the shadow: -142 mA</title></circle>
+<circle class="dot" cx="195.8" cy="212.6" r="4.5"><title>20 Oct 00:38 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="194.1" cy="212.6" r="4.5"><title>20 Oct 00:39 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="169.9" cy="303.2" r="4.5"><title>20 Oct 02:13 UTC, in the shadow: -196 mA</title></circle>
+<circle class="dot" cx="295.8" cy="284.6" r="4.5"><title>20 Oct 02:18 UTC, in the shadow: -156 mA</title></circle>
+<circle class="ring" cx="448.6" cy="224.2" r="9"/>
+<circle class="dot" cx="448.6" cy="224.2" r="4.5"><title>20 Oct 04:45 UTC, in sunlight: -26 mA</title></circle>
+<circle class="dot" cx="509.3" cy="200.5" r="4.5"><title>20 Oct 04:49 UTC, in sunlight: 25 mA</title></circle>
+<circle class="dot" cx="642.0" cy="204.7" r="4.5"><title>20 Oct 04:50 UTC, in sunlight: 16 mA</title></circle>
+<circle class="dot" cx="505.9" cy="180.6" r="4.5"><title>20 Oct 04:51 UTC, in sunlight: 68 mA</title></circle>
+<circle class="dot" cx="636.9" cy="164.3" r="4.5"><title>20 Oct 04:53 UTC, in sunlight: 103 mA</title></circle>
+<circle class="dot" cx="339.3" cy="212.6" r="4.5"><title>20 Oct 08:28 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="337.6" cy="212.6" r="4.5"><title>20 Oct 08:29 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="545.0" cy="142.0" r="4.5"><title>20 Oct 11:04 UTC, in sunlight: 151 mA</title></circle>
+<circle class="dot" cx="475.9" cy="191.7" r="4.5"><title>20 Oct 11:05 UTC, in sunlight: 44 mA</title></circle>
+<circle class="dot" cx="594.5" cy="165.7" r="4.5"><title>20 Oct 12:34 UTC, in sunlight: 100 mA</title></circle>
+<circle class="dot" cx="656.6" cy="169.4" r="4.5"><title>20 Oct 12:37 UTC, in sunlight: 92 mA</title></circle>
+<circle class="dot" cx="449.9" cy="150.8" r="4.5"><title>20 Oct 12:40 UTC, in sunlight: 132 mA</title></circle>
+<circle class="ring" cx="448.2" cy="228.4" r="9"/>
+<circle class="dot" cx="448.2" cy="228.4" r="4.5"><title>20 Oct 12:41 UTC, in sunlight: -35 mA</title></circle>
+<circle class="dot" cx="513.8" cy="149.9" r="4.5"><title>20 Oct 12:42 UTC, in sunlight: 134 mA</title></circle>
+<circle class="dot" cx="343.1" cy="277.7" r="4.5"><title>20 Oct 17:41 UTC, in the shadow: -141 mA</title></circle>
+<circle class="ring" cx="638.1" cy="264.2" r="9"/>
+<circle class="dot" cx="638.1" cy="264.2" r="4.5"><title>20 Oct 18:45 UTC, in sunlight: -112 mA</title></circle>
+<circle class="dot" cx="147.3" cy="269.8" r="4.5"><title>20 Oct 22:15 UTC, in the shadow: -124 mA</title></circle>
+<circle class="dot" cx="212.9" cy="315.8" r="4.5"><title>20 Oct 22:16 UTC, in the shadow: -223 mA</title></circle>
+<circle class="dot" cx="211.2" cy="269.8" r="4.5"><title>20 Oct 22:17 UTC, in the shadow: -124 mA</title></circle>
+<circle class="dot" cx="209.5" cy="296.7" r="4.5"><title>20 Oct 22:18 UTC, in the shadow: -182 mA</title></circle>
+<circle class="dot" cx="169.3" cy="213.1" r="4.5"><title>21 Oct 01:20 UTC, in the shadow: -2 mA</title></circle>
+<circle class="dot" cx="234.7" cy="212.6" r="4.5"><title>21 Oct 01:21 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="233.0" cy="212.6" r="4.5"><title>21 Oct 01:22 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="231.4" cy="212.6" r="4.5"><title>21 Oct 01:23 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="359.0" cy="212.6" r="4.5"><title>21 Oct 01:27 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="154.0" cy="213.5" r="4.5"><title>21 Oct 01:29 UTC, in the shadow: -3 mA</title></circle>
+<circle class="dot" cx="698.3" cy="147.6" r="4.5"><title>21 Oct 04:03 UTC, in sunlight: 139 mA</title></circle>
+<circle class="dot" cx="495.1" cy="144.8" r="4.5"><title>21 Oct 04:04 UTC, in sunlight: 145 mA</title></circle>
+<circle class="dot" cx="284.7" cy="362.2" r="4.5"><title>21 Oct 04:49 UTC, in the shadow: -323 mA</title></circle>
+<circle class="dot" cx="535.1" cy="205.2" r="4.5"><title>21 Oct 10:17 UTC, in sunlight: 15 mA</title></circle>
+<circle class="dot" cx="533.4" cy="147.6" r="4.5"><title>21 Oct 10:18 UTC, in sunlight: 139 mA</title></circle>
+<circle class="dot" cx="531.7" cy="181.5" r="4.5"><title>21 Oct 10:19 UTC, in sunlight: 66 mA</title></circle>
+<circle class="dot" cx="530.0" cy="178.7" r="4.5"><title>21 Oct 10:20 UTC, in sunlight: 72 mA</title></circle>
+<circle class="dot" cx="512.2" cy="125.3" r="4.5"><title>21 Oct 11:50 UTC, in sunlight: 187 mA</title></circle>
+<circle class="dot" cx="510.5" cy="214.9" r="4.5"><title>21 Oct 11:51 UTC, in sunlight: -6 mA</title></circle>
+<circle class="dot" cx="508.8" cy="166.6" r="4.5"><title>21 Oct 11:52 UTC, in sunlight: 98 mA</title></circle>
+<circle class="dot" cx="574.3" cy="221.0" r="4.5"><title>21 Oct 11:53 UTC, in sunlight: -19 mA</title></circle>
+<circle class="dot" cx="565.2" cy="166.6" r="4.5"><title>21 Oct 13:17 UTC, in sunlight: 98 mA</title></circle>
+<circle class="dot" cx="630.7" cy="133.2" r="4.5"><title>21 Oct 13:18 UTC, in sunlight: 170 mA</title></circle>
+<circle class="ring" cx="629.0" cy="254.0" r="9"/>
+<circle class="dot" cx="629.0" cy="254.0" r="4.5"><title>21 Oct 13:19 UTC, in sunlight: -90 mA</title></circle>
+<circle class="dot" cx="691.2" cy="172.2" r="4.5"><title>21 Oct 13:22 UTC, in sunlight: 86 mA</title></circle>
+<circle class="dot" cx="689.5" cy="159.7" r="4.5"><title>21 Oct 13:23 UTC, in sunlight: 113 mA</title></circle>
+<circle class="dot" cx="133.4" cy="278.1" r="4.5"><title>21 Oct 16:52 UTC, in the shadow: -142 mA</title></circle>
+<circle class="dot" cx="333.4" cy="308.8" r="4.5"><title>21 Oct 16:53 UTC, in the shadow: -208 mA</title></circle>
+<circle class="dot" cx="197.2" cy="277.7" r="4.5"><title>21 Oct 16:54 UTC, in the shadow: -141 mA</title></circle>
+<circle class="dot" cx="652.1" cy="179.6" r="4.5"><title>21 Oct 21:01 UTC, in sunlight: 70 mA</title></circle>
+<circle class="dot" cx="648.7" cy="193.6" r="4.5"><title>21 Oct 21:03 UTC, in sunlight: 40 mA</title></circle>
+<circle class="dot" cx="505.7" cy="151.8" r="4.5"><title>21 Oct 21:08 UTC, in sunlight: 130 mA</title></circle>
+<circle class="ring" cx="571.3" cy="235.4" r="9"/>
+<circle class="dot" cx="571.3" cy="235.4" r="4.5"><title>21 Oct 21:09 UTC, in sunlight: -50 mA</title></circle>
+<circle class="dot" cx="361.1" cy="213.1" r="4.5"><title>22 Oct 00:33 UTC, in the shadow: -2 mA</title></circle>
+<circle class="dot" cx="223.5" cy="212.6" r="4.5"><title>22 Oct 00:34 UTC, in the shadow: -1 mA</title></circle>
+<circle class="dot" cx="269.5" cy="331.1" r="4.5"><title>22 Oct 02:06 UTC, in the shadow: -256 mA</title></circle>
+<circle class="dot" cx="333.4" cy="310.2" r="4.5"><title>22 Oct 02:08 UTC, in the shadow: -211 mA</title></circle>
+<circle class="dot" cx="158.4" cy="323.2" r="4.5"><title>22 Oct 09:48 UTC, in the shadow: -239 mA</title></circle>
+<circle class="dot" cx="222.2" cy="304.6" r="4.5"><title>22 Oct 09:50 UTC, in the shadow: -199 mA</title></circle>
+<circle class="dot" cx="355.0" cy="285.1" r="4.5"><title>22 Oct 09:51 UTC, in the shadow: -157 mA</title></circle>
+<circle class="dot" cx="443.6" cy="206.1" r="4.5"><title>22 Oct 10:58 UTC, in sunlight: 13 mA</title></circle>
+<circle class="dot" cx="641.7" cy="157.3" r="4.5"><title>22 Oct 11:00 UTC, in sunlight: 118 mA</title></circle>
+<circle class="dot" cx="492.9" cy="136.4" r="4.5"><title>22 Oct 12:27 UTC, in sunlight: 163 mA</title></circle>
+<circle class="dot" cx="556.7" cy="134.6" r="4.5"><title>22 Oct 12:29 UTC, in sunlight: 167 mA</title></circle>
+<circle class="dot" cx="487.8" cy="129.9" r="4.5"><title>22 Oct 12:30 UTC, in sunlight: 177 mA</title></circle>
+<circle class="dot" cx="486.1" cy="135.5" r="4.5"><title>22 Oct 12:31 UTC, in sunlight: 165 mA</title></circle>
+<circle class="dot" cx="484.4" cy="135.0" r="4.5"><title>22 Oct 12:32 UTC, in sunlight: 166 mA</title></circle>
+<circle class="dot" cx="549.9" cy="163.4" r="4.5"><title>22 Oct 12:33 UTC, in sunlight: 105 mA</title></circle>
+<circle class="dot" cx="548.4" cy="146.2" r="4.5"><title>22 Oct 12:34 UTC, in sunlight: 142 mA</title></circle>
+<text class="ink" x="232.0" y="420" font-size="14" font-weight="600" text-anchor="middle">In the Earth's shadow (60 beacons)</text>
+<text class="muted" x="232.0" y="438" font-size="12" text-anchor="middle">charging 0 · discharging 37 · flat 23</text>
+<text class="ink" x="568.0" y="420" font-size="14" font-weight="600" text-anchor="middle">In sunlight (77 beacons)</text>
+<text class="muted" x="568.0" y="438" font-size="12" text-anchor="middle">charging 61 · discharging 8 · flat 8</text>
+<circle class="dot" cx="68" cy="460" r="4.5"/><text class="ink" x="80" y="464" font-size="12">one beacon</text>
+<circle class="dot" cx="176" cy="460" r="4.5"/><circle class="ring" cx="176" cy="460" r="9"/><text class="ink" x="194" y="464" font-size="12">in sunlight but discharging (8)</text>
+<text class="muted" x="736" y="464" font-size="11" text-anchor="end">flat: within 20 mA of zero</text>
+</svg>
