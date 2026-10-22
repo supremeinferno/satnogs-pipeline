@@ -13,6 +13,8 @@ scrape_configs:
     static_configs: [{targets: ["fetch:9100"]}]
   - job_name: fetch-telemetry
     static_configs: [{targets: ["fetch-telemetry:9100"]}]
+  - job_name: watch
+    static_configs: [{targets: ["watch:9100"]}]
   - job_name: store
     static_configs: [{targets: ["store:9100"]}]
   # RabbitMQ's own metrics; the plugin ships in the image. The default path

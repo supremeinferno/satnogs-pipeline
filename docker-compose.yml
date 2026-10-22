@@ -56,6 +56,17 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Battery rules with eclipse context; reads Postgres, fetches the TLE from CelesTrak.
+  watch:
+    build: .
+    command: ["watch", "-interval", "1m"]
+    environment:
+      DATABASE_URL: postgres://satnogs:satnogs@postgres:5432/satnogs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   store:
     build: .
     command: ["store"]
