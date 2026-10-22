@@ -4,6 +4,7 @@
 //	satnogs-pipeline fetch   API -> queue
 //	satnogs-pipeline fetch-telemetry   SatNOGS DB telemetry API -> queue (needs SATNOGS_DB_TOKEN)
 //	satnogs-pipeline store   queues -> Postgres
+//	satnogs-pipeline watch   battery rules with eclipse context -> metrics
 //	satnogs-pipeline notify  receives Alertmanager's webhook
 package main
 
@@ -19,8 +20,8 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 || (os.Args[1] != "fetch" && os.Args[1] != "fetch-telemetry" && os.Args[1] != "store" && os.Args[1] != "notify") {
-		fmt.Fprintln(os.Stderr, "usage: satnogs-pipeline fetch|fetch-telemetry|store|notify [flags]")
+	if len(os.Args) < 2 || (os.Args[1] != "fetch" && os.Args[1] != "fetch-telemetry" && os.Args[1] != "store" && os.Args[1] != "watch" && os.Args[1] != "notify") {
+		fmt.Fprintln(os.Stderr, "usage: satnogs-pipeline fetch|fetch-telemetry|store|watch|notify [flags]")
 		os.Exit(2)
 	}
 	cmd := os.Args[1]
@@ -56,6 +57,8 @@ func main() {
 		err = runFetchTelemetry(ctx, amqpURL, token, *interval, *satellite, *maxPages)
 	case "store":
 		err = runStore(ctx, dsn, amqpURL)
+	case "watch":
+		err = runWatch(ctx, dsn, *interval, *satellite)
 	case "notify":
 		err = runNotify(ctx, *listen, os.Getenv("TELEGRAM_TOKEN"), os.Getenv("TELEGRAM_CHAT_ID"))
 	}

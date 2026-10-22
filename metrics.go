@@ -53,6 +53,37 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 12), // 1 ms .. 2 s
 	})
 
+	// What watch reports about the satellite. The alerts are rules on these.
+	batteryMV = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pipeline_battery_voltage_millivolts",
+		Help: "Voltage in the newest beacon, by battery.",
+	}, []string{"battery"})
+
+	batteryMA = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pipeline_battery_current_milliamps",
+		Help: "Current in the newest beacon, by battery (positive charging).",
+	}, []string{"battery"})
+
+	batteryAnomaly = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pipeline_battery_anomaly",
+		Help: "1 while a battery rule is violated: discharging_in_sunlight, low_voltage.",
+	}, []string{"battery", "rule"})
+
+	satelliteSunlit = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "pipeline_satellite_in_sunlight",
+		Help: "1 if SGP4 puts the satellite in sunlight right now, 0 in the Earth's shadow.",
+	})
+
+	telemetryAge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "pipeline_telemetry_age_seconds",
+		Help: "Seconds since the newest stored beacon was received.",
+	})
+
+	tleAge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "pipeline_tle_age_seconds",
+		Help: "Age of the element set used for sunlight, measured from its epoch.",
+	})
+
 	// How long after a pass ended its data reached the database. Dominated by
 	// how late ground stations upload, which the pipeline cannot control.
 	ingestDelay = promauto.NewHistogram(prometheus.HistogramOpts{
