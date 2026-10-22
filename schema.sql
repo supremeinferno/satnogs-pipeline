@@ -4,8 +4,13 @@ CREATE TABLE IF NOT EXISTS observations (
     started_at TIMESTAMPTZ NOT NULL,
     ended_at   TIMESTAMPTZ NOT NULL,
     status     TEXT        NOT NULL,
-    frame_files INT        NOT NULL DEFAULT 0 -- demod files SatNOGS has for it
+    frame_files INT        NOT NULL DEFAULT 0, -- demod files SatNOGS has for it
+    stored_at  TIMESTAMPTZ NOT NULL DEFAULT now() -- when store first wrote the row
 );
+
+-- For a database made before stored_at existed (CREATE TABLE IF NOT EXISTS
+-- does not add columns). Its old rows get the time of this statement.
+ALTER TABLE observations ADD COLUMN IF NOT EXISTS stored_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 CREATE INDEX IF NOT EXISTS observations_norad_started
     ON observations (norad_id, started_at DESC);
