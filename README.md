@@ -222,3 +222,7 @@ Limits: the shadow is a cylinder, not the real cone with penumbra, which matters
 - `testdata/uwe4_frames.txt` holds a few real frames from the SatNOGS DB API. Check the data licence of SatNOGS DB before reusing them.
 - `observation_id` is 0 for frames not uploaded through SatNOGS Network; they are real frames and are stored with a NULL observation.
 - A poll that fails part-way (for example on a 429) makes the next poll read all pages again instead of stopping at the first page with nothing new, so the pages it never reached are not lost.
+
+## License
+
+[GNU Affero General Public License v3.0](LICENSE). The decoders for the satellites' radio formats are generated from the format definitions of [satnogs-decoders](https://gitlab.com/librespacefoundation/satnogs/satnogs-decoders) (AGPL-3.0), which is why this project has the same licence. The SGP4 propagator is [orbitscreen](https://github.com/supremeinferno/orbitscreen) (MIT), used as a Go module. The frames in `testdata/` come from the SatNOGS DB API; check its data licence before reusing them.
