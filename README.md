@@ -1,8 +1,8 @@
 # satnogs-pipeline
 
-Reads the radio telemetry of a real CubeSat ([UWE-4](https://en.wikipedia.org/wiki/UWE-4), University of Würzburg) from volunteer ground stations, decodes it, stores it, and raises an alert when a battery misbehaves. The alert knows whether the satellite is in sunlight or in the Earth's shadow, because a battery is supposed to discharge in the shadow.
+Reads the radio telemetry of real CubeSats from volunteer ground stations, decodes it, stores it, and raises an alert when a battery misbehaves. Four satellites so far: [UWE-4](https://en.wikipedia.org/wiki/UWE-4) (University of Würzburg), CatSat, SNUGLITE and Sharjahsat-1. The alert knows whether the satellite is in sunlight or in the Earth's shadow, because a battery is supposed to discharge in the shadow.
 
-![Battery A current of UWE-4 by lighting: 0 of 60 beacons in the Earth's shadow are charging, 61 of 77 in sunlight are](docs/img/battery-current.svg)
+![Battery A current of UWE-4 (the one satellite whose current sign is checked) by lighting: 0 of 60 beacons in the Earth's shadow are charging, 61 of 77 in sunlight are](docs/img/battery-current.svg)
 
 The data comes from [SatNOGS](https://satnogs.org/), a worldwide network of volunteer ground stations. The lighting is worked out with the SGP4 orbit model from [orbitscreen](https://github.com/supremeinferno/orbitscreen) and the Sun's position, not read from the battery, which is what makes the picture above a check and not a circle.
 
@@ -28,12 +28,13 @@ flowchart LR
 
 ## Results
 
-All measured on real UWE-4 data, 17 to 22 October 2026 (137 beacons over 5.1 days), unless it says otherwise.
+Measured on real data from 14 to 22 October 2026, unless it says otherwise. The lighting check below is UWE-4's (137 beacons over 5.1 days); the others are newer to the pipeline and have less history.
 
 | | |
 |---|---|
+| Satellites | 4 satellites, 5 batteries, 366 distinct beacons stored: UWE-4 (2 batteries, voltage, current, temperature, charge), SNUGLITE, CatSat and Sharjahsat-1 (voltage only). |
 | Lighting model against the batteries | In the shadow, **0 of 60** beacons were charging. In sunlight, 61 of 77 were. |
-| Battery rule on the same history | Replayed at each of the 137 readings, "discharging in sunlight" and "low voltage" never fired. |
+| Battery rules on the same history | Replayed at each of the 137 UWE-4 readings, "discharging in sunlight" and "low voltage" never fired. The "below its own baseline" rule gave 14 false alarms in 138 readings with a short baseline and none with the one it has now, but it was only active for about two days of that history: see [Battery watch](#battery-watch). |
 | Same rule on made-up readings | Three in the shadow at -300 mA (what "current is negative" would flag): no alert. Three in sunlight at -120 mA: alert, delivered to Telegram, resolved when removed. |
 | Failure tests ([`scripts/chaos.sh`](scripts/chaos.sh)) | 6 breakages, 20 checks, 30 to 45 seconds, on Docker Compose and on Kubernetes: store down, RabbitMQ restart, PostgreSQL down, duplicates, a message that is not JSON. |
 | Throughput of `store` | 5,400 observations per second with one replica, 8,000 with two, 8,900 with four (draining a 20,000-message queue, Docker Compose on a laptop). See [Performance](#performance). |
@@ -47,6 +48,9 @@ All measured on real UWE-4 data, 17 to 22 October 2026 (137 beacons over 5.1 day
 - 38 of the first 72 telemetry frames have `observation_id` 0 (not uploaded through SatNOGS Network). I had treated that as invalid and sent good frames to the dead queue. They are stored with a NULL observation now.
 - The telemetry API answers 429 every eight to ten seconds. A poll that failed on it started over from the first page and never finished. It now waits out the 429 on the same page.
 - Most satellites' frames are no use: Morse code and APRS text carry no battery data. 75 satellites were scanned (slowly, because of that rate limit) to find one with a binary, documented beacon.
+- The first version of the "below its own baseline" rule (4% under the median of 8 or more readings) fired 14 times in 138 UWE-4 readings. Its sunlit voltage sits at 4.20 V when charging and near 4.05 V when not, and a short baseline sees one of the two. The rule now needs 40 readings over 3 days.
+- The format definitions I wanted to turn into decoders are AGPL-3.0, which I only checked after planning to use them. The project is AGPL-3.0 now; see [License](#license).
+- Not every format can be generated: Celesta's Go parser does not compile (the generator puts -1 into a uint8). Each satellite has to be tried.
 - One beacon with the battery discharging in sunlight is not an anomaly: 8 of 77 sunlit beacons do it, for a few tens of mA. The rule asks for three, 30 minutes apart.
 
 ## How it fits together
@@ -55,9 +59,13 @@ Five programs in one binary, so that a slow or dead part never stops the others:
 
 - `fetch` polls the observations API on an interval, follows its pagination, skips passes that haven't happened yet, and publishes each new or changed observation. It waits for the broker's confirmation (publisher confirms) before counting a message as sent.
 - `store` reads the queue and writes to Postgres. A message is acknowledged only after it is saved, so a crash loses nothing; an undecodable or invalid message goes to the dead queue instead of blocking the rest.
-- `fetch-telemetry` reads raw radio frames of one satellite (UWE-4, NORAD 43880) from the SatNOGS DB API, which needs an account token (`SATNOGS_DB_TOKEN` in `.env`), and respects its rate limit (HTTP 429, `Retry-After`). `store` decodes each frame into battery voltage, current, temperature and charge ([uwe4.go](uwe4.go)), checks the frame's checksum, and keeps one row per distinct frame: the same beacon heard by two ground stations is stored once. Frames that are not beacons or arrive damaged are counted and dropped; only frames that can never work (bad JSON, an unknown satellite) go to the dead queue.
-- `watch` applies battery rules that know whether the satellite is in sunlight (see [Battery watch](#battery-watch)) and exports the result as metrics.
+- `fetch-telemetry` reads raw radio frames of every satellite in the registry (or those given with `-satellites`) from the SatNOGS DB API, which needs an account token (`SATNOGS_DB_TOKEN` in `.env`), and respects its rate limit (HTTP 429, `Retry-After`). `store` decodes each frame with the satellite's decoder (below) into one reading per battery, and keeps one row per distinct frame and battery: the same beacon heard by two ground stations is stored once. Frames that carry no battery data, arrive damaged or hold an implausible voltage are counted and dropped; only frames that can never work (bad JSON, an unknown satellite) go to the dead queue.
+- `watch` applies battery rules that know whether each satellite is in sunlight (see [Battery watch](#battery-watch)) and exports the result as metrics.
 - `notify` receives Alertmanager's webhook and sends each alert to Telegram (see [Alerts](#alerts)).
+**Satellites and decoders.** `satellites.go` lists what the pipeline watches: a NORAD number, a decoder, a plausible voltage range (used instead of a checksum) and how long a silence is worth an alert. UWE-4's decoder is written by hand ([uwe4.go](uwe4.go)) and checks its frame's checksum. The others are Go parsers generated from the Kaitai Struct format definitions of [satnogs-decoders](https://gitlab.com/librespacefoundation/satnogs/satnogs-decoders) by `scripts/kaitai/generate.sh` (pinned to one commit, output in `internal/decoders/`), read by field name. On three real UWE-4 frames the generated parser read exactly the same values as the hand-written decoder.
+
+Adding a satellite: generate its parser, look at what real frames give for its battery fields (units are often not documented: SNUGLITE's are not), add an entry, and add real frames to `testdata/`. A battery current is enabled only after its sign has been checked against the lighting, as was done for UWE-4.
+
 - Running any of them twice never duplicates a row; a row is updated only when its status or frame count changed.
 - All of them survive their dependencies going down (API, broker, database) and shut down cleanly on Ctrl-C or SIGTERM.
 
@@ -202,12 +210,15 @@ A battery that is discharging is only a problem if the satellite is in sunlight.
 
 In the shadow the battery was never charging. The 8 sunlit readings that discharge (-26 to -162 mA) are not near the edge of the shadow (the nearest edge is at least 10 minutes 45 seconds away), so they are not errors of the model; most likely a load such as the radio. That is why one such reading is not an alert. "Flat" means within 20 mA of zero.
 
-| Rule | Fires when |
-|---|---|
-| Discharging in sunlight | the newest 3 sunlit readings of a battery are all below -50 mA and span at least 30 minutes (so the beacons of one pass count once). Replayed at each of the 137 readings, it never fires. |
-| Low voltage | the newest reading is below 3500 mV (the lowest seen was 3732 mV) |
-| Telemetry stale | no beacon stored for 12 hours (the largest gap seen was 7.7 hours) |
-| Orbit data stale | the TLE is more than 10 days old; the sunlight rule is then switched off |
+| Rule | Applies to | Fires when |
+|---|---|---|
+| Discharging in sunlight | batteries with a current whose sign is checked (UWE-4 only so far) | the newest 3 sunlit readings are all below -50 mA and span at least 30 minutes (so the beacons of one pass count once). Replayed at each of the 137 readings, it never fires. |
+| Below its own baseline | every battery | in sunlight, the median of the newest 3 readings is lower than the median of the earlier sunlit readings by more than 2% and more than 8 times their median absolute deviation. The baseline needs at least 40 readings over 3 days, so a new satellite is not judged until it has that history. |
+| Low voltage | UWE-4 (3500 mV; the lowest seen was 3732) | the newest reading is below the limit |
+| Telemetry stale | every satellite | no beacon stored for longer than that satellite's limit (UWE-4: 12 hours, its largest gap in 5 days was 7.7) |
+| Orbit data stale | every satellite | the TLE is more than 10 days old; the rules that need the lighting are then switched off |
+
+How far each rule has been checked, plainly: "discharging in sunlight" has been checked against real data and against made-up readings. "Below its own baseline" is the weakest. No real anomaly has been seen, so it has never fired for a true reason; on real data it stayed quiet, but UWE-4's battery A was the only one with enough history to activate it, and only for about two days. Its first, simpler version gave 14 false alarms, which is how the long baseline came about. Treat it as a rule that has not yet been shown to work. The other satellites' voltage units are the definitions' (CatSat in millivolts, Sharjahsat-1 as 0.008993 V per unit); SNUGLITE's unit is assumed to be millivolts from the size of the numbers (about 8.3 V for two cells), which the baseline rule does not depend on. Sharjahsat-1's beacons with a battery are rare (17 of its frames in 9 days).
 
 **Tested with made-up readings** in the database: three readings in the shadow at -300 mA (what a plain "current is negative" rule would flag) raised nothing; three readings in sunlight at -120 mA raised `BatteryDischargingInSunlight` for both batteries, delivered to Telegram, and the alert resolved when the readings were removed.
 
@@ -219,7 +230,7 @@ Limits: the shadow is a cylinder, not the real cone with penumbra, which matters
 - Many recent observations are `unknown` until someone vets them. Observations older than the first page with no changes are not re-checked, so a late status change on an old row is missed.
 - Observation frame data (`demoddata`) are links to files, not JSON; the telemetry API returns the raw frames directly.
 - The telemetry API returns raw frames only: its `decoded` field is empty or just `"influxdb"`, so decoding is done here. Many satellites there send Morse (CW) or APRS text; UWE-4 sends binary beacons with a documented layout (SatNOGS's Kaitai definition), which is why it was chosen.
-- `testdata/uwe4_frames.txt` holds a few real frames from the SatNOGS DB API. Check the data licence of SatNOGS DB before reusing them.
+- `testdata/*_frames.txt` hold real frames from the SatNOGS DB API (UWE-4, CatSat, SNUGLITE, Sharjahsat-1). Check the data licence of SatNOGS DB before reusing them.
 - `observation_id` is 0 for frames not uploaded through SatNOGS Network; they are real frames and are stored with a NULL observation.
 - A poll that fails part-way (for example on a 429) makes the next poll read all pages again instead of stopping at the first page with nothing new, so the pages it never reached are not lost.
 
