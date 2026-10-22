@@ -14,11 +14,12 @@ import (
 	"github.com/supremeinferno/satnogs-pipeline/internal/orbit"
 )
 
-// The alert rules, with the numbers they come from. They were set from three
-// days of UWE-4 data (89 readings): a battery that is in sunlight is charging
-// (positive current) almost all the time, but 5 of 41 sunlit readings showed a
-// small discharge of 26 to 112 mA, none near the edge of the Earth's shadow
-// and never two in a row. So one such reading means nothing; a run does.
+// The alert rules, with the numbers they come from. They were set from the
+// first three days of UWE-4 data (89 readings) and replayed over 137 readings
+// in 5.1 days: a battery in sunlight is charging (positive current) in 61 of 77
+// readings, but 8 sunlit readings showed a small discharge of 26 to 162 mA, none
+// near the edge of the Earth's shadow. So one such reading means nothing; a run
+// does. Neither rule fires anywhere in that history.
 const (
 	// The newest dischargeRun readings taken in sunlight must all show a
 	// current below dischargeMA, and span at least dischargeSpan, so that
