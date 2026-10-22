@@ -345,8 +345,8 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "UWE-4 battery voltage (newest beacon)",
-      "description": "Newest stored beacon; it only moves when a ground station hears the satellite.",
+      "title": "Battery voltage (newest beacon)",
+      "description": "Newest stored beacon per battery; it only moves when a ground station hears the satellite. Satellites have packs of different sizes.",
       "gridPos": {
         "x": 0,
         "y": 40,
@@ -371,7 +371,7 @@
         {
           "refId": "A",
           "expr": "pipeline_battery_voltage_millivolts",
-          "legendFormat": "battery {{battery}}",
+          "legendFormat": "{{satellite}} {{battery}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -382,8 +382,8 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "UWE-4 battery current (positive = charging)",
-      "description": "Negative while in the Earth's shadow is normal.",
+      "title": "Battery current (positive = charging)",
+      "description": "Only for batteries whose current is known and whose sign has been checked against the lighting.",
       "gridPos": {
         "x": 12,
         "y": 40,
@@ -408,7 +408,7 @@
         {
           "refId": "A",
           "expr": "pipeline_battery_current_milliamps",
-          "legendFormat": "battery {{battery}}",
+          "legendFormat": "{{satellite}} {{battery}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -445,7 +445,7 @@
         {
           "refId": "A",
           "expr": "pipeline_satellite_in_sunlight",
-          "legendFormat": "sunlit",
+          "legendFormat": "{{satellite}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -457,7 +457,7 @@
       "id": 13,
       "type": "timeseries",
       "title": "Battery rule violations",
-      "description": "1 means an alert is firing. Discharging in sunlight needs 3 readings over 30+ minutes.",
+      "description": "1 means an alert is firing. Needs 3 readings over 30+ minutes.",
       "gridPos": {
         "x": 12,
         "y": 48,
@@ -482,7 +482,7 @@
         {
           "refId": "A",
           "expr": "pipeline_battery_anomaly",
-          "legendFormat": "{{battery}} {{rule}}",
+          "legendFormat": "{{satellite}} {{battery}} {{rule}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

@@ -45,29 +45,37 @@ groups:
   - name: battery
     rules:
       # The persistence (three readings, 30 minutes apart, all in sunlight) is
-      # in the watch program, so this fires as soon as the metric is 1.
+      # in the watch program, so these fire as soon as the metric is 1.
       - alert: BatteryDischargingInSunlight
         expr: pipeline_battery_anomaly{rule="discharging_in_sunlight"} == 1
         labels: {severity: warning}
         annotations:
-          summary: "Battery {{ $labels.battery }} is discharging in sunlight (3 readings over 30+ minutes, current below -50 mA)"
+          summary: "{{ $labels.satellite }}: battery {{ $labels.battery }} is discharging in sunlight (3 readings over 30+ minutes, current below -50 mA)"
+
+      - alert: BatteryVoltageBelowBaseline
+        expr: pipeline_battery_anomaly{rule="voltage_below_baseline"} == 1
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.satellite }}: battery {{ $labels.battery }} voltage in sunlight is more than 4% below its own usual (median of the earlier sunlit beacons)"
 
       - alert: BatteryVoltageLow
         expr: pipeline_battery_anomaly{rule="low_voltage"} == 1
         labels: {severity: critical}
         annotations:
-          summary: "Battery {{ $labels.battery }} voltage is below 3500 mV (the lowest seen in 3 days was 3732 mV)"
+          summary: "{{ $labels.satellite }}: battery {{ $labels.battery }} voltage is below its limit"
 
+      # Each satellite is heard at its own rate; watch exports how long a
+      # silence is worth an alert (UWE-4: 12 hours, its largest gap in 5 days was 7.7).
       - alert: TelemetryStale
-        expr: pipeline_telemetry_age_seconds > 12 * 3600
+        expr: pipeline_telemetry_age_seconds > on(satellite) pipeline_telemetry_stale_after_seconds
         for: 5m
         labels: {severity: warning}
         annotations:
-          summary: "No UWE-4 beacon stored for {{ $value | humanizeDuration }} (largest gap seen in 3 days: 7.7 hours)"
+          summary: "No {{ $labels.satellite }} beacon stored for {{ $value | humanizeDuration }}"
 
       - alert: TLEStale
         expr: pipeline_tle_age_seconds > 10 * 86400
         for: 5m
         labels: {severity: warning}
         annotations:
-          summary: "The orbit data is {{ $value | humanizeDuration }} old; sunlight can no longer be trusted, so the sunlight rule is off"
+          summary: "{{ $labels.satellite }}: the orbit data is {{ $value | humanizeDuration }} old; sunlight can no longer be trusted, so the rules that need it are off"
