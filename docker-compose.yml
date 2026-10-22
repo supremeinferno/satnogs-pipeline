@@ -109,9 +109,9 @@ services:
   grafana:
     image: grafana/grafana:11.2.0
     environment:
-      # Local development only: no login, everyone is an admin.
+      # Local development only: no login, everyone can only view the provisioned dashboard.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro

@@ -131,9 +131,9 @@ spec:
         - name: grafana
           image: grafana/grafana:11.2.0
           env:
-            # Local development only: no login, everyone is an admin.
+            # Local development only: no login, everyone can only view the provisioned dashboard.
             - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "true"}
-            - {name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Admin}
+            - {name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Viewer}
             - {name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true"}
           ports:
             - {name: http, containerPort: 3000}
