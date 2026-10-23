@@ -310,6 +310,12 @@ function start() {
     // Labels: above the dot if there is room, else below it, else higher up;
     // the ones in front of the Earth are placed first.
     const placed = [];
+    // the intro text, which labels keep off on wide screens
+    let textBox = null;
+    if (W >= 900) {
+      const br = band.getBoundingClientRect(), rs = [...band.querySelectorAll(".space-inner > :not([hidden])")].map((e) => e.getBoundingClientRect());
+      if (rs.length) textBox = { l: Math.min(...rs.map((r) => r.left)) - br.left, r: Math.max(...rs.map((r) => r.right)) - br.left + 8, t: rs[0].top - br.top, b: Math.max(...rs.map((r) => r.bottom)) - br.top };
+    }
     const order = objs.map((o) => { const s2 = o.world.clone().project(camera); return { o, s2, back: occluded(o.world) }; }).sort((a, b) => a.back - b.back);
     for (const { o, s2, back } of order) {
       o.label.classList.toggle("behind", back);
@@ -319,6 +325,7 @@ function start() {
       const free = (top) => top > 8 && placed.every((p) => x + lw / 2 < p.l || x - lw / 2 > p.r || top + lh < p.t || top > p.b);
       let top = [dotY - lh - 9, dotY + 9, dotY - 2 * lh - 14, dotY + lh + 14].find(free);
       if (top === undefined) top = Math.max(dotY - lh - 9, 8);
+      o.label.classList.toggle("over-text", !!textBox && x - lw / 2 < textBox.r && x + lw / 2 > textBox.l && top < textBox.b && top + lh > textBox.t);
       placed.push({ l: x - lw / 2 - 3, r: x + lw / 2 + 3, t: top - 3, b: top + lh + 3 });
       o.label.style.transform = `translate(${Math.round(x - lw / 2)}px, ${Math.round(top)}px)`;
     }

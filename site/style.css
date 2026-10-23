@@ -65,6 +65,7 @@ h1 { font-size: clamp(2.3rem, 6vw, 4rem); line-height: 1.02; margin: 16px 0 14px
 .sat-label i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .sat-label:hover, .sat-label:focus-visible, .sat-label.on { border-color: #4cc9f0; outline: none; }
 .sat-label.behind { opacity: .25; }
+.sat-label.over-text:not(.on) { opacity: 0; pointer-events: none; }
 .labels.away .sat-label { opacity: 0; pointer-events: none; }
 .scene-bar { position: absolute; z-index: 3; left: clamp(326px, 68%, calc(100% - 326px)); bottom: 34px; transform: translateX(-50%); width: min(620px, calc(100% - 32px));
   display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 14px; background: rgba(5, 11, 22, .7);
