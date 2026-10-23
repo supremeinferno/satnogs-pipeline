@@ -225,3 +225,75 @@ func TestOrbitModelMatchesRealBeacons(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchSatnogsTLEText(t *testing.T) {
+	var query string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		w.Write([]byte(`[
+			{"tle0":"0 UWE-4","tle1":"1 43880U 18111E   26293.00000000  .00052175  00000-0  77906-3 0  9991","tle2":"2 43880  97.5855 230.8177 0005029 185.3876 174.7325 15.54876102430540","updated":"2026-10-21T03:00:00Z"},
+			{"tle0":"0 UWE-4","tle1":"1 43880U 18111E   26295.77193049  .00052175  00000-0  77906-3 0  9991","tle2":"2 43880  97.5855 230.8177 0005029 185.3876 174.7325 15.54876102430540","updated":"2026-10-23T03:00:00Z"}]`))
+	}))
+	defer srv.Close()
+	old := satnogsTLEURL
+	satnogsTLEURL = srv.URL
+	defer func() { satnogsTLEURL = old }()
+
+	text, err := fetchSatnogsTLEText(context.Background(), 43880)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query, "norad_cat_id=43880") {
+		t.Errorf("query %q", query)
+	}
+	el, err := parseTLE(text)
+	if err != nil || el.Name != "UWE-4" {
+		t.Fatalf("name %q, err %v (the leading \"0 \" of the name line must go)", el.Name, err)
+	}
+	if !strings.Contains(text, "26295.77193049") {
+		t.Error("should pick the most recently updated element set")
+	}
+}
+
+func TestFetchSatnogsTLETextWithNothingToGive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`[]`)) }))
+	defer srv.Close()
+	old := satnogsTLEURL
+	satnogsTLEURL = srv.URL
+	defer func() { satnogsTLEURL = old }()
+	if _, err := fetchSatnogsTLEText(context.Background(), 1); err == nil {
+		t.Fatal("an empty answer must be an error")
+	}
+}
+
+// SatNOGS first; CelesTrak only when SatNOGS fails.
+func TestFetchTLETextAnyOrder(t *testing.T) {
+	good, _ := os.ReadFile("testdata/uwe4.tle")
+	celestrakHits := 0
+	celestrak := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { celestrakHits++; w.Write(good) }))
+	defer celestrak.Close()
+	satnogsOK := true
+	satnogs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !satnogsOK {
+			http.Error(w, "down", http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte(`[{"tle0":"0 UWE-4","tle1":"1 43880U 18111E   26295.77193049  .00052175  00000-0  77906-3 0  9991","tle2":"2 43880  97.5855 230.8177 0005029 185.3876 174.7325 15.54876102430540","updated":"2026-10-23T03:00:00Z"}]`))
+	}))
+	defer satnogs.Close()
+	oldC, oldS := celestrakURL, satnogsTLEURL
+	celestrakURL, satnogsTLEURL = celestrak.URL, satnogs.URL
+	defer func() { celestrakURL, satnogsTLEURL = oldC, oldS }()
+
+	if _, err := fetchTLETextAny(context.Background(), 43880); err != nil || celestrakHits != 0 {
+		t.Fatalf("SatNOGS answered: err %v, CelesTrak asked %d times", err, celestrakHits)
+	}
+	satnogsOK = false
+	if _, err := fetchTLETextAny(context.Background(), 43880); err != nil || celestrakHits != 1 {
+		t.Fatalf("SatNOGS down: err %v, CelesTrak asked %d times", err, celestrakHits)
+	}
+	celestrak.Close()
+	if _, err := fetchTLETextAny(context.Background(), 43880); err == nil {
+		t.Fatal("both down must be an error")
+	}
+}

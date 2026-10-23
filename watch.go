@@ -180,7 +180,7 @@ func (w *watcher) currentModel(ctx context.Context, norad int) *orbitModel {
 	}
 	m := w.models[norad]
 	if m == nil || time.Since(w.fetched[norad]) > tleRefresh {
-		t, err := fetchTLE(ctx, norad)
+		t, err := fetchTLEAny(ctx, norad)
 		if err == nil {
 			var nm *orbitModel
 			if nm, err = newOrbitModel(t); err == nil {

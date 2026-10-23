@@ -13,8 +13,6 @@ import (
 	"path/filepath"
 	"slices"
 	"time"
-
-	"github.com/supremeinferno/orbitscreen/pkg/tle"
 )
 
 // siteIndex is the page that shows status.json. It is a single file with its
@@ -44,6 +42,7 @@ type snapSatellite struct {
 	NORAD           int            `json:"norad"`
 	SunlitNow       *bool          `json:"sunlit_now,omitempty"`
 	TLEEpoch        *time.Time     `json:"tle_epoch,omitempty"`
+	TLE             string         `json:"tle,omitempty"` // the element set used: the fallback for the next run
 	LastBeacon      *time.Time     `json:"last_beacon,omitempty"`
 	StaleAfterHours float64        `json:"stale_after_hours"`
 	Stale           bool           `json:"stale"`
@@ -71,8 +70,9 @@ type snapSource struct {
 	// frames returns up to `pages` pages of the newest frames of a satellite.
 	// On an error it returns the frames it got before it.
 	frames func(ctx context.Context, norad, pages int) ([]TelemetryFrame, error)
-	tle    func(ctx context.Context, norad int) (*tle.TLE, error)
-	now    func() time.Time
+	// tle returns an element set as text: a name and two lines.
+	tle func(ctx context.Context, norad int) (string, error)
+	now func() time.Time
 }
 
 // buildSnapshot makes the next snapshot from the last one (or nil) and what the
@@ -139,14 +139,25 @@ func buildSatellite(ctx context.Context, src snapSource, sat satellite, old *sna
 	}
 
 	var model *orbitModel
-	if t, terr := src.tle(ctx, sat.NORAD); terr != nil {
+	text, terr := src.tle(ctx, sat.NORAD)
+	if terr != nil && old != nil && old.TLE != "" {
+		// Orbit data could not be fetched: use what the last run had. It ages by
+		// about a kilometre a day, and tleMaxAge switches the lighting rules off
+		// when it is too old.
+		ss.Error = joinErrors(ss.Error, "using the orbit data of the previous run: "+terr.Error())
+		text, terr = old.TLE, nil
+	}
+	if terr != nil {
 		ss.Error = joinErrors(ss.Error, "no orbit data: "+terr.Error())
+	} else if t, perr := parseTLE(text); perr != nil {
+		ss.Error = joinErrors(ss.Error, "bad orbit data: "+perr.Error())
 	} else if m, merr := newOrbitModel(t); merr != nil {
 		ss.Error = joinErrors(ss.Error, "bad orbit data: "+merr.Error())
 	} else {
 		model = m
 		epoch := t.Epoch
 		ss.TLEEpoch = &epoch
+		ss.TLE = text
 		if lit, lerr := m.sunlit(now); lerr == nil {
 			ss.SunlitNow = &lit
 		}
@@ -304,29 +315,22 @@ func liveSource(token, tleCache string) snapSource {
 			}
 			return all, nil
 		},
-		tle: func(ctx context.Context, norad int) (*tle.TLE, error) {
+		tle: func(ctx context.Context, norad int) (string, error) {
 			path := ""
 			if tleCache != "" {
 				path = filepath.Join(tleCache, fmt.Sprintf("%d.tle", norad))
 				if st, err := os.Stat(path); err == nil && time.Since(st.ModTime()) < 2*time.Hour {
 					if b, err := os.ReadFile(path); err == nil {
-						return parseTLE(string(b))
+						return string(b), nil
 					}
 				}
 			}
-			text, err := fetchTLEText(ctx, norad)
-			if err != nil {
-				return nil, err
-			}
-			t, err := parseTLE(text)
-			if err != nil {
-				return nil, err
-			}
-			if path != "" {
+			text, err := fetchTLETextAny(ctx, norad)
+			if err == nil && path != "" {
 				os.MkdirAll(tleCache, 0o755)
 				os.WriteFile(path, []byte(text), 0o644)
 			}
-			return t, nil
+			return text, err
 		},
 	}
 }

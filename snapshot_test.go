@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/supremeinferno/orbitscreen/pkg/tle"
 )
 
 // fakeSource serves the real UWE-4 frames of testdata, the real TLE of the same
@@ -27,7 +25,7 @@ func fakeSource(t *testing.T, frames []TelemetryFrame, ferr error, now time.Time
 		frames: func(ctx context.Context, norad, pages int) ([]TelemetryFrame, error) {
 			return frames, ferr
 		},
-		tle: func(ctx context.Context, norad int) (*tle.TLE, error) { return parseTLE(string(text)) },
+		tle: func(ctx context.Context, norad int) (string, error) { return string(text), nil },
 	}
 }
 
@@ -119,7 +117,7 @@ func TestSnapshotKeepsOldDataWhenFetchFails(t *testing.T) {
 // With no orbit data the lighting is unknown, and the rules that need it stay off.
 func TestSnapshotWithoutOrbitData(t *testing.T) {
 	src := fakeSource(t, uwe4Frames(t), nil, snapNow)
-	src.tle = func(ctx context.Context, norad int) (*tle.TLE, error) { return nil, errors.New("celestrak down") }
+	src.tle = func(ctx context.Context, norad int) (string, error) { return "", errors.New("celestrak down") }
 	s := buildSnapshot(context.Background(), src, nil, []satellite{uwe4(t)}).Satellites[0]
 	if s.SunlitNow != nil || len(s.Shadows) != 0 || !strings.Contains(s.Error, "celestrak down") {
 		t.Fatalf("%+v", s)
@@ -186,5 +184,36 @@ func TestSnapshotJSONAndPage(t *testing.T) {
 	page, _ := os.ReadFile(filepath.Join(dir, "index.html"))
 	if !strings.Contains(string(page), "<title>Satellite batteries</title>") || !strings.Contains(string(page), "status.json") {
 		t.Fatal("the page does not read status.json")
+	}
+}
+
+// When orbit data cannot be fetched, the last run's element set is used, so the
+// page keeps its lighting; and the page says so.
+func TestSnapshotFallsBackToThePreviousOrbitData(t *testing.T) {
+	first := buildSnapshot(context.Background(), fakeSource(t, uwe4Frames(t), nil, snapNow), nil, []satellite{uwe4(t)})
+	if first.Satellites[0].TLE == "" {
+		t.Fatal("the element set used is not kept in the snapshot")
+	}
+	src := fakeSource(t, nil, nil, snapNow.Add(time.Hour))
+	src.tle = func(ctx context.Context, norad int) (string, error) { return "", errors.New("timeout") }
+	s := buildSnapshot(context.Background(), src, first, []satellite{uwe4(t)}).Satellites[0]
+	if s.SunlitNow == nil || len(s.Shadows) == 0 {
+		t.Fatalf("the lighting was lost: %+v", s)
+	}
+	if !strings.Contains(s.Error, "orbit data of the previous run") || !strings.Contains(s.Error, "timeout") {
+		t.Fatalf("the page is not told: %q", s.Error)
+	}
+	if s.TLE != first.Satellites[0].TLE {
+		t.Error("the fallback element set should be kept for the run after")
+	}
+}
+
+// With no orbit data at all, and none from the last run, the lighting is unknown.
+func TestSnapshotWithoutAnyOrbitDataHasNoLighting(t *testing.T) {
+	src := fakeSource(t, uwe4Frames(t), nil, snapNow)
+	src.tle = func(ctx context.Context, norad int) (string, error) { return "", errors.New("down") }
+	s := buildSnapshot(context.Background(), src, nil, []satellite{uwe4(t)}).Satellites[0]
+	if s.SunlitNow != nil || s.TLE != "" {
+		t.Fatalf("%+v", s)
 	}
 }
