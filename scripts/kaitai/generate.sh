@@ -3,7 +3,7 @@
 # definitions in satnogs-decoders (AGPL-3.0), at the commit pinned below, into
 # internal/decoders/<name>/<name>.go. Needs git and node.
 #
-#   scripts/kaitai/generate.sh catsat snuglite sharjahsat1
+#   scripts/kaitai/generate.sh catsat snuglite sharjahsat1 grbbeta
 #
 # The generated files are committed. They are not edited by hand.
 set -euo pipefail
