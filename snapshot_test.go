@@ -183,8 +183,18 @@ func TestSnapshotJSONAndPage(t *testing.T) {
 		t.Fatalf("status.json: %v", err)
 	}
 	page, _ := os.ReadFile(filepath.Join(dir, "index.html"))
-	if !strings.Contains(string(page), "<title>Satellite batteries</title>") || !strings.Contains(string(page), "status.json") {
+	app, _ := os.ReadFile(filepath.Join(dir, "app.js"))
+	globe, _ := os.ReadFile(filepath.Join(dir, "globe.js"))
+	if !strings.Contains(string(page), "<title>Satellite batteries</title>") || !strings.Contains(string(app), `fetch("status.json"`) {
 		t.Fatal("the page does not read status.json")
+	}
+	for _, f := range []string{"style.css", "app.js", "globe.js"} {
+		if !strings.Contains(string(page), `"`+f+`"`) {
+			t.Errorf("index.html does not load %s", f)
+		}
+	}
+	if !strings.Contains(string(globe), `from "three"`) {
+		t.Error("globe.js is not the three.js globe")
 	}
 }
 

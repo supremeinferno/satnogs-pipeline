@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"math"
 	"os"
@@ -20,11 +21,12 @@ import (
 	"github.com/supremeinferno/satnogs-pipeline/internal/orbit"
 )
 
-// siteIndex is the page that shows status.json. It is a single file with its
-// style and script inline, so the published site is two files.
+// site is the page that shows status.json: index.html, its style, app.js for
+// the cards and charts, and globe.js for the three.js globe. With status.json
+// that is the whole published site.
 //
-//go:embed site/index.html
-var siteIndex []byte
+//go:embed site
+var site embed.FS
 
 const (
 	snapshotHistory = 14 * 24 * time.Hour // readings kept in status.json
@@ -358,7 +360,16 @@ func writeSnapshot(dir string, s *snapshot) error {
 	if err := os.WriteFile(filepath.Join(dir, "status.json"), b, 0o644); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "index.html"), siteIndex, 0o644)
+	return fs.WalkDir(site, "site", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := site.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, filepath.Base(path)), b, 0o644)
+	})
 }
 
 // liveSource reads from the real APIs. CelesTrak asks for the same element set
