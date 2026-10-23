@@ -20,7 +20,7 @@ flowchart LR
   Q1 -.-> D1[(dead queue)]
   Q2 -.-> D2[(dead queue)]
   PG --> W[watch]
-  CT[CelesTrak: orbit data] --> W
+  CT[SatNOGS DB or CelesTrak: orbit data] --> W
   F & FT & S & W --> PR[Prometheus]
   PR --> AM[Alertmanager] --> N[notify] --> TG[Telegram]
   PR --> GR[Grafana]
@@ -219,7 +219,7 @@ kind delete cluster --name satnogs              # remove everything
 
 ## Battery watch
 
-A battery that is discharging is only a problem if the satellite is in sunlight. In the Earth's shadow it has to discharge. So `watch` works out the lighting at each beacon: it takes the current element set (TLE) from CelesTrak, finds the satellite's position with the SGP4 propagator in `internal/sgp4`, finds the Sun with a low-precision series (`internal/orbit`), and tests whether the satellite is inside the Earth's shadow, modelled as a cylinder.
+A battery that is discharging is only a problem if the satellite is in sunlight. In the Earth's shadow it has to discharge. So `watch` works out the lighting at each beacon: it takes the current element set (TLE) from SatNOGS DB (CelesTrak if that fails), finds the satellite's position with the SGP4 propagator (orbitscreen's `pkg/sgp4`), finds the Sun with a low-precision series (`internal/orbit`), and tests whether the satellite is inside the Earth's shadow, modelled as a cylinder.
 
 **Checked against the real batteries** (137 UWE-4 beacons over 5.1 days, battery A; `go run ./cmd/plotbattery` redraws the figure at the top and prints the numbers below from the database):
 
