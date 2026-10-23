@@ -6,6 +6,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
 COPY internal ./internal
+# snapshot embeds the status page.
+COPY site ./site
 # CGO off gives a static binary that runs on the tiny image below.
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /satnogs-pipeline .
 
