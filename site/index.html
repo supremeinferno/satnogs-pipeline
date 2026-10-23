@@ -4,90 +4,186 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Satellite batteries</title>
-<meta name="description" content="Battery voltage of small satellites heard by volunteer ground stations, checked against whether each one is in sunlight or in the Earth's shadow. Refreshed every hour.">
+<meta name="description" content="Are the batteries of small satellites behaving? Beacons heard by volunteer radio stations, checked against whether each satellite is in sunlight or in the Earth's shadow. Refreshed every hour.">
 <style>
 :root {
-  color-scheme: light;
-  --surface: #fcfcfb; --card: #ffffff; --border: #e4e3de;
-  --ink: #0b0b0b; --muted: #52514e;
-  --series: #2a78d6; --alert: #c4501f; --alert-bg: #fdeee7;
-  --shadow: #e4e3de; --grid: #e4e3de; --axis: #8a8983;
+  color-scheme: dark;
+  --bg: #03070d; --surface: rgba(13, 22, 37, .78); --solid: #0b1422; --raised: rgba(255, 255, 255, .04);
+  --border: rgba(148, 178, 210, .16); --text: #e6eef7; --muted: #8b9cb1; --faint: #5f7087;
+  --accent: #4cc9f0; --accent-soft: rgba(76, 201, 240, .14);
+  --ok: #3ddc97; --ok-soft: rgba(61, 220, 151, .13); --warn: #ffb454; --warn-soft: rgba(255, 180, 84, .15);
+  --dot: #4cc9f0; --dot-ring: #0b1422; --band: rgba(2, 6, 14, .55); --plot: rgba(255, 255, 255, .035); --grid: rgba(148, 178, 210, .13);
+  --sun: rgba(255, 196, 87, .20); --night: rgba(4, 9, 20, .9); --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  --glow1: rgba(76, 201, 240, .13); --glow2: rgba(120, 90, 255, .11);
 }
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    color-scheme: dark;
-    --surface: #1a1a19; --card: #222221; --border: #333331;
-    --ink: #f0efec; --muted: #c3c2b7;
-    --series: #3987e5; --alert: #f08a5d; --alert-bg: #3a2a22;
-    --shadow: #2e2e2c; --grid: #333331; --axis: #8f8e86;
+    color-scheme: light;
+    --bg: #eef3f8; --surface: rgba(255, 255, 255, .92); --solid: #ffffff; --raised: rgba(11, 18, 32, .035);
+    --border: #d9e1ea; --text: #0b1220; --muted: #54627a; --faint: #8593a8;
+    --accent: #0a7ea8; --accent-soft: rgba(10, 126, 168, .10);
+    --ok: #0f7f5a; --ok-soft: rgba(15, 127, 90, .11); --warn: #a85d00; --warn-soft: rgba(168, 93, 0, .12);
+    --dot: #1b78c9; --dot-ring: #ffffff; --band: rgba(60, 80, 120, .13); --plot: rgba(11, 18, 32, .02); --grid: rgba(11, 18, 32, .10);
+    --sun: rgba(255, 190, 70, .30); --night: rgba(48, 66, 110, .50); --shadow: 0 8px 24px rgba(20, 40, 80, .09);
+    --glow1: rgba(10, 126, 168, .10); --glow2: rgba(120, 90, 255, .06);
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--surface); color: var(--ink); font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
-h1 { font-size: 1.6rem; margin: 0 0 4px; }
-h2 { font-size: 1.15rem; margin: 0; }
-h3 { font-size: 1rem; margin: 20px 0 4px; }
-.lede { color: var(--muted); margin: 0 0 4px; max-width: 70ch; }
-.updated { color: var(--muted); font-size: .9rem; margin: 0 0 24px; }
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin: 0 0 16px; }
-.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
-.norad { color: var(--muted); font-size: .85rem; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
-.chip { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: .85rem; color: var(--ink); }
-.chip.alert { border-color: var(--alert); background: var(--alert-bg); color: var(--ink); font-weight: 600; }
-.note { color: var(--muted); font-size: .85rem; margin: 8px 0 0; }
-.value { font-size: 1.5rem; font-weight: 600; }
-.value small { font-size: .9rem; font-weight: 400; color: var(--muted); margin-left: 8px; }
-.rules { margin: 4px 0 0; padding-left: 20px; }
-.rules li.fired { color: var(--ink); font-weight: 600; }
-.rules li.fired::marker { content: "⚠ "; color: var(--alert); }
-.quiet { color: var(--muted); margin: 4px 0 0; font-size: .9rem; }
-svg.chart { width: 100%; height: auto; display: block; margin-top: 8px; }
-svg .bg { fill: var(--card); } svg .band { fill: var(--shadow); } svg .grid { stroke: var(--grid); stroke-width: 1; }
-svg .dot { fill: var(--series); stroke: var(--card); stroke-width: 2; } svg .dot.shade { fill: var(--card); stroke: var(--series); stroke-width: 2; } svg .dot.last { stroke: var(--ink); stroke-width: 2.5; }
-svg .ring { fill: none; stroke: var(--alert); stroke-width: 2; }
-svg text { fill: var(--muted); font-size: 11px; font-family: inherit; } svg text.strong { fill: var(--ink); font-weight: 600; }
-svg .zero { stroke: var(--axis); stroke-dasharray: 4 3; }
-.legend { color: var(--muted); font-size: .85rem; margin: 4px 0 0; }
-.swatch { display: inline-block; width: 18px; height: 10px; background: var(--shadow); border: 1px solid var(--border); vertical-align: -1px; margin-right: 4px; }
-details { margin-top: 8px; font-size: .9rem; }
-summary { cursor: pointer; color: var(--muted); }
-table { border-collapse: collapse; margin-top: 6px; width: 100%; max-width: 520px; }
-th, td { text-align: left; padding: 2px 12px 2px 0; font-variant-numeric: tabular-nums; }
-th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
-footer { color: var(--muted); font-size: .9rem; margin-top: 32px; }
-footer p { margin: 0 0 8px; max-width: 75ch; } a { color: var(--series); }
-#error { display: none; border: 1px solid var(--alert); background: var(--alert-bg); border-radius: 8px; padding: 12px 16px; }
+html { background: var(--bg); }
+body {
+  margin: 0; color: var(--text); min-height: 100vh;
+  font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(1100px 520px at 85% -8%, var(--glow1), transparent 62%),
+    radial-gradient(900px 480px at -5% 0%, var(--glow2), transparent 58%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+a { color: var(--accent); }
+svg { display: block; }
+.icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* header */
+.hero { padding: 44px 0 22px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 2.4s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+h1 { font-size: clamp(2rem, 5.5vw, 3.1rem); line-height: 1.08; margin: 14px 0 12px; font-weight: 750; letter-spacing: -.02em;
+  background: linear-gradient(100deg, var(--text) 30%, var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lede { color: var(--muted); max-width: 62ch; margin: 0; font-size: 1.05rem; }
+.updated { color: var(--faint); font-size: 13px; margin: 14px 0 0; }
+
+/* summary tiles */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0 26px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; backdrop-filter: blur(8px); }
+.tile .n { font-size: 1.9rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .l { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.tile.good .n { color: var(--ok); } .tile.bad .n { color: var(--warn); }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px; box-shadow: var(--shadow); backdrop-filter: blur(10px); min-width: 0; }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+h2 { font-size: 1.35rem; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+.norad { color: var(--faint); font-size: 12.5px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 11px 4px 9px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.pill .icon { width: 15px; height: 15px; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.mute { background: var(--raised); color: var(--muted); }
+
+.light { display: flex; align-items: center; gap: 12px; margin: 16px 0 10px; }
+.orb { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.orb .icon { width: 22px; height: 22px; }
+.orb.sun { background: var(--sun); color: #ffb52e; } .orb.moon { background: var(--raised); color: var(--muted); border: 1px solid var(--border); }
+.light strong { display: block; font-size: 15px; } .light small { color: var(--muted); }
+.timeline { margin: 4px 0 6px; }
+.timeline svg { width: 100%; height: auto; border-radius: 8px; }
+.key { color: var(--faint); font-size: 12px; margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.key i { display: inline-block; width: 12px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--border); }
+
+.batt { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.bhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
+h3 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.big { font-size: 2.3rem; font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.big span { font-size: 1rem; font-weight: 500; color: var(--muted); margin-left: 3px; }
+.flow { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; border-radius: 999px; padding: 2px 10px 2px 7px; background: var(--raised); color: var(--muted); }
+.flow .icon { width: 14px; height: 14px; }
+.flow.charging { background: var(--ok-soft); color: var(--ok); }
+.flow.discharging { background: var(--warn-soft); color: var(--warn); }
+.sub { color: var(--faint); font-size: 12.5px; margin: 4px 0 0; }
+.chartbox { margin-top: 12px; }
+.chartbox .cap { color: var(--muted); font-size: 12.5px; margin: 0 0 2px; }
+svg.chart { width: 100%; height: auto; overflow: visible; }
+svg .plot { fill: var(--plot); } svg .band { fill: var(--band); } svg .grid { stroke: var(--grid); stroke-width: 1; }
+svg .zero { stroke: var(--faint); stroke-dasharray: 4 3; stroke-width: 1; }
+svg .path { fill: none; stroke: var(--dot); stroke-width: 1.6; opacity: .45; stroke-linejoin: round; }
+svg .dot { fill: var(--dot); stroke: var(--dot-ring); stroke-width: 2; }
+svg .dot.shade { fill: var(--dot-ring); stroke: var(--dot); stroke-width: 2; }
+svg .dot.last { stroke: var(--text); stroke-width: 2.5; }
+svg .halo { fill: var(--dot); opacity: .18; }
+svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+svg text.val { fill: var(--text); font-weight: 700; font-size: 12px; }
+.rules { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.rules li { display: flex; gap: 8px; align-items: flex-start; background: var(--warn-soft); color: var(--text); border-radius: 10px; padding: 8px 10px; font-size: 13.5px; }
+.rules .icon { color: var(--warn); margin-top: 1px; }
+.quiet { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; display: flex; align-items: center; gap: 7px; }
+.quiet .icon { color: var(--ok); width: 16px; height: 16px; }
+details { margin-top: 10px; font-size: 13.5px; }
+summary { cursor: pointer; color: var(--muted); } summary:hover { color: var(--text); }
+table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+th, td { text-align: left; padding: 4px 10px 4px 0; font-variant-numeric: tabular-nums; }
+th { color: var(--faint); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--border); }
+.note { color: var(--faint); font-size: 12.5px; margin: 10px 0 0; }
+
+/* how it works */
+.how { margin: 34px 0 6px; }
+.how h2 { font-size: 1.1rem; margin-bottom: 14px; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.step { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.step .num { width: 26px; height: 26px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+.step b { display: block; margin-bottom: 2px; } .step p { margin: 0; color: var(--muted); font-size: 14px; }
+footer { color: var(--faint); font-size: 13px; padding: 28px 0 56px; }
+footer p { margin: 0 0 8px; max-width: 80ch; }
+#error { display: none; border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
+.skeleton { height: 140px; border-radius: 18px; background: var(--raised); border: 1px solid var(--border); }
+
+@media (max-width: 900px) { .cards { grid-template-columns: 1fr; } .tiles { grid-template-columns: repeat(2, 1fr); } .steps { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .wrap { padding: 0 14px; } .hero { padding-top: 28px; } .card { padding: 16px; border-radius: 16px; } .big { font-size: 2rem; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>Satellite batteries</h1>
-  <p class="lede">Small satellites, heard by volunteer radio stations around the world. A battery is supposed to discharge while its satellite is in the Earth's shadow, so an alert here only counts if the satellite was in sunlight at the time.</p>
-  <p class="updated" id="updated">Loading…</p>
-  <div id="error"></div>
-  <div id="cards"></div>
+<div class="wrap">
+  <header class="hero">
+    <div class="brand"><span class="pulse" aria-hidden="true"></span>satnogs-pipeline · live status</div>
+    <h1>Satellite batteries</h1>
+    <p class="lede">Small satellites, heard by volunteer radio stations around the world. A battery should charge in sunlight and sag in the Earth's shadow, so an alert here only counts if the satellite was in sunlight at the time.</p>
+    <p class="updated" id="updated">Loading…</p>
+  </header>
+  <div id="error" role="alert"></div>
+  <section class="tiles" id="tiles" aria-label="Summary"></section>
+  <section class="cards" id="cards" aria-label="Satellites"><div class="skeleton"></div><div class="skeleton"></div></section>
+
+  <section class="how" aria-labelledby="how-h">
+    <h2 id="how-h">How it works</h2>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><b>Hear</b><p>Volunteer ground stations record each satellite's radio beacons and share them through SatNOGS.</p></div>
+      <div class="step"><div class="num">2</div><b>Decode</b><p>The raw bytes of every beacon become a battery voltage, and a current where the satellite reports it.</p></div>
+      <div class="step"><div class="num">3</div><b>Compare with the Sun</b><p>An orbit model says whether the satellite was in sunlight or in the Earth's shadow when it sent each beacon, and the rules only judge what the light allows.</p></div>
+    </div>
+  </section>
   <footer>
-    <p><strong>How to read this.</strong> Each dot is one beacon a satellite sent, over the last three days. The shaded stretches are when the satellite was in the Earth's shadow, worked out from its orbit and the Sun's position (not from the battery). Hollow dots were sent in the shadow, filled ones in sunlight. A healthy battery stays up in the light and sags in the shadow.</p>
-    <p><strong>What this is not.</strong> A learning project, not an operations tool. It is refreshed every hour, not live. The rules were checked against a few days of real data and have not yet been shown to catch a real fault. Some voltage units are taken from the satellite's published format or assumed from the size of the numbers.</p>
-    <p>Code and the full story: <a href="https://github.com/supremeinferno/satnogs-pipeline">satnogs-pipeline</a>, which uses the orbit model of <a href="https://github.com/supremeinferno/orbitscreen">orbitscreen</a>. Beacons from <a href="https://satnogs.org/">SatNOGS</a>, orbit data from <a href="https://celestrak.org/">CelesTrak</a>.</p>
+    <p><strong>What this is not.</strong> A learning project, not an operations tool. It refreshes every hour, not live. The rules were checked against a few days of real data and have not yet been shown to catch a real fault. Some voltage units are taken from the satellite's published format or assumed from the size of the numbers.</p>
+    <p>Code and the full story: <a href="https://github.com/supremeinferno/satnogs-pipeline">satnogs-pipeline</a>, with the orbit model of <a href="https://github.com/supremeinferno/orbitscreen">orbitscreen</a>, whose <a href="https://supremeinferno.github.io/orbitscreen/">live tracker</a> shows these satellites too. Beacons from <a href="https://satnogs.org/">SatNOGS</a>, orbit data from SatNOGS DB and <a href="https://celestrak.org/">CelesTrak</a>.</p>
   </footer>
-</main>
+</div>
 <script>
 "use strict";
+const SVGNS = "http://www.w3.org/2000/svg";
 const RULE_TEXT = {
-  discharging_in_sunlight: "Discharging while in sunlight (three readings, at least 30 minutes apart, all below -50 mA)",
-  voltage_below_baseline: "Voltage in sunlight is clearly below this battery's own usual",
-  low_voltage: "Voltage is below the safe limit for this satellite",
+  discharging_in_sunlight: "Discharging while in sunlight: three readings, at least 30 minutes apart, all below −50 mA.",
+  voltage_below_baseline: "Voltage in sunlight is clearly below this battery's own usual.",
+  low_voltage: "Voltage is below the safe limit for this satellite.",
 };
 const RULE_ORDER = ["discharging_in_sunlight", "voltage_below_baseline", "low_voltage"];
-const SVGNS = "http://www.w3.org/2000/svg";
+const ICONS = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  alert: '<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18.2v.1"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  minus: '<path d="M6 12h12"/>',
+};
+const icon = (n) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
 
-function el(tag, attrs, ...kids) {
+function el(tag, attrs, html) {
   const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else e.setAttribute(k, v); }
-  for (const k of kids) e.append(k);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  if (html !== undefined) e.innerHTML = html;
   return e;
 }
 function sv(tag, attrs, text) {
@@ -96,6 +192,7 @@ function sv(tag, attrs, text) {
   if (text !== undefined) e.textContent = text;
   return e;
 }
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function ago(ms) {
   const m = Math.round(ms / 60000);
   if (m < 2) return "just now";
@@ -104,137 +201,175 @@ function ago(ms) {
   if (h < 48) return h + " hours ago";
   return Math.round(h / 24) + " days ago";
 }
-function volts(mv) { return (mv / 1000).toFixed(2) + " V"; }
-function utc(t, opts) { return new Date(t).toLocaleString("en-GB", Object.assign({ timeZone: "UTC" }, opts)); }
-function batteryTitle(name) { return name === "main" ? "Battery" : "Battery " + name.toUpperCase(); }
-
-// niceTicks returns about n round values between lo and hi, and their step.
+const volts = (mv) => (mv / 1000).toFixed(2);
+const utc = (t, o) => new Date(t).toLocaleString("en-GB", Object.assign({ timeZone: "UTC" }, o));
+const batteryTitle = (n) => (n === "main" ? "Battery" : "Battery " + n.toUpperCase());
+function flow(ma) {
+  if (ma == null) return null;
+  if (Math.abs(ma) < 20) return { cls: "", icon: "minus", text: `idle, ${ma} mA` };
+  return ma > 0 ? { cls: "charging", icon: "up", text: `charging, +${ma} mA` } : { cls: "discharging", icon: "down", text: `discharging, ${ma} mA` };
+}
 function niceTicks(lo, hi, n) {
   const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
   const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag, out = [];
   for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
   return { ticks: out, step };
 }
+function chartWidth() {
+  const w = Math.min(window.innerWidth, 1120);
+  const cols = window.innerWidth > 900 ? 2 : 1;
+  const card = cols === 2 ? (w - 40 - 16) / 2 : w - 28;
+  return Math.max(260, Math.floor(card - 42));
+}
 
-// chart draws readings (key "mv" or "ma") against time, with the shadow shaded.
-function chart(readings, key, shadows, t0, t1, label) {
-  // Drawn at the width it is shown at, so the labels keep their size on a phone.
-  const W = Math.min(720, Math.max(300, document.documentElement.clientWidth - 66)), H = key === "mv" ? 210 : 150, L = 52, R = 12, T = 10, B = 26;
-  const pts = readings.filter(r => r[key] != null && new Date(r.t) >= t0);
+// The last 24 hours of one satellite: sunlit or shadow, and when beacons arrived.
+function timeline(sat, t1) {
+  const W = chartWidth(), H = 40, t0 = t1 - 86400000;
+  const x = (t) => (W * (t - t0)) / (t1 - t0);
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H + 18}`, role: "img", "aria-label": `${sat.name}: sunlight and shadow over the last 24 hours, with the beacons received` });
+  const hasLight = (sat.shadows || []).length > 0 || sat.sunlit_now != null;
+  svg.append(sv("rect", { x: 0, y: 0, width: W, height: H, rx: 8, fill: hasLight ? "var(--sun)" : "var(--raised)" }));
+  for (const [a, b] of sat.shadows || []) {
+    const xa = Math.max(0, x(Date.parse(a))), xb = Math.min(W, x(Date.parse(b)));
+    if (xb > xa) svg.append(sv("rect", { x: xa, y: 0, width: xb - xa, height: H, fill: "var(--night)" }));
+  }
+  const times = new Set();
+  for (const b of sat.batteries || []) for (const r of b.readings) { const t = Date.parse(r.t); if (t >= t0 && t <= t1) times.add(Math.round(t / 60000)); }
+  for (const m of times) svg.append(sv("rect", { x: x(m * 60000) - 1, y: 8, width: 2.5, height: H - 16, rx: 1, fill: "var(--accent)" }));
+  for (const [i, lab] of ["24 h ago", "12 h ago", "snapshot"].entries()) {
+    const xx = [0, W / 2, W][i];
+    svg.append(sv("text", { x: xx, y: H + 14, "text-anchor": i === 0 ? "start" : i === 2 ? "end" : "middle" }, lab));
+  }
+  return svg;
+}
+
+function chart(readings, key, sat, t0, t1, label) {
+  const W = chartWidth(), H = key === "mv" ? 190 : 130, L = 46, R = 14, T = 12, B = 24;
+  const pts = readings.filter((r) => r[key] != null && Date.parse(r.t) >= t0);
   if (!pts.length) return null;
-  const vals = pts.map(r => r[key]);
+  const vals = pts.map((r) => r[key]);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   if (key === "ma") { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
-  const minSpan = key === "mv" ? 100 : 100;
-  if (hi - lo < minSpan) { const c = (hi + lo) / 2; lo = c - minSpan / 2; hi = c + minSpan / 2; }
-  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-  const x = t => L + (W - L - R) * (new Date(t) - t0) / (t1 - t0);
-  const y = v => T + (H - T - B) * (hi - v) / (hi - lo);
+  if (hi - lo < 100) { const c = (hi + lo) / 2; lo = c - 50; hi = c + 50; }
+  const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+  const x = (t) => L + (W - L - R) * (t - t0) / (t1 - t0);
+  const y = (v) => T + (H - T - B) * (hi - v) / (hi - lo);
   const svg = sv("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": label });
-  svg.append(sv("rect", { class: "bg", x: L, y: T, width: W - L - R, height: H - T - B }));
-  for (const [a, b] of shadows || []) {
-    const xa = Math.max(L, x(a)), xb = Math.min(W - R, x(b));
+  svg.append(sv("rect", { class: "plot", x: L, y: T, width: W - L - R, height: H - T - B, rx: 6 }));
+  for (const [a, b] of sat.shadows || []) {
+    const xa = Math.max(L, x(Date.parse(a))), xb = Math.min(W - R, x(Date.parse(b)));
     if (xb > xa) svg.append(sv("rect", { class: "band", x: xa, y: T, width: xb - xa, height: H - T - B }));
   }
-  const { ticks, step } = niceTicks(lo, hi, 4);
-  const decimals = Math.max(0, Math.ceil(-Math.log10(step / 1000) - 1e-9));
+  const { ticks, step } = niceTicks(lo, hi, 3);
+  const dec = Math.max(0, Math.ceil(-Math.log10(step / 1000) - 1e-9));
   for (const v of ticks) {
-    const yy = y(v);
-    svg.append(sv("line", { class: "grid", x1: L, x2: W - R, y1: yy, y2: yy }));
-    svg.append(sv("text", { x: L - 6, y: yy + 4, "text-anchor": "end" }, key === "mv" ? (v / 1000).toFixed(decimals) : Math.round(v)));
+    svg.append(sv("line", { class: "grid", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+    svg.append(sv("text", { x: L - 7, y: y(v) + 4, "text-anchor": "end" }, key === "mv" ? (v / 1000).toFixed(dec) : Math.round(v)));
   }
   if (key === "ma") svg.append(sv("line", { class: "zero", x1: L, x2: W - R, y1: y(0), y2: y(0) }));
   const day = 86400000;
   for (let d = Math.ceil(t0 / day) * day; d < t1; d += day) {
+    svg.append(sv("text", { x: x(d), y: H - 6, "text-anchor": "middle" }, utc(d, { day: "numeric", month: "short" })));
     svg.append(sv("line", { class: "grid", x1: x(d), x2: x(d), y1: T, y2: H - B }));
-    svg.append(sv("text", { x: x(d), y: H - B + 16, "text-anchor": "middle" }, utc(d, { day: "numeric", month: "short" })));
   }
-  svg.append(sv("text", { x: 12, y: T + (H - T - B) / 2, transform: `rotate(-90 12 ${T + (H - T - B) / 2})`, "text-anchor": "middle" }, key === "mv" ? "volts" : "milliamps"));
+  // beacons from one pass are joined by a faint line
+  let run = [];
+  const flush = () => { if (run.length > 1) svg.append(sv("polyline", { class: "path", points: run.map((r) => `${x(Date.parse(r.t)).toFixed(1)},${y(r[key]).toFixed(1)}`).join(" ") })); run = []; };
+  pts.forEach((r, i) => { if (i && Date.parse(r.t) - Date.parse(pts[i - 1].t) > 40 * 60000) flush(); run.push(r); });
+  flush();
   pts.forEach((r, i) => {
     const last = i === pts.length - 1;
-    const c = sv("circle", { class: "dot" + (r.sunlit === false ? " shade" : "") + (last ? " last" : ""), cx: x(r.t), cy: y(r[key]), r: last ? 5 : 3.5 });
+    if (last) svg.append(sv("circle", { class: "halo", cx: x(Date.parse(r.t)), cy: y(r[key]), r: 11 }));
+    const c = sv("circle", { class: "dot" + (r.sunlit === false ? " shade" : "") + (last ? " last" : ""), cx: x(Date.parse(r.t)), cy: y(r[key]), r: last ? 5 : 3.5 });
     const state = r.sunlit == null ? "" : r.sunlit ? ", in sunlight" : ", in the Earth's shadow";
-    c.append(sv("title", {}, `${utc(r.t, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} UTC${state}: ${key === "mv" ? volts(r.mv) : r.ma + " mA"}`));
+    c.append(sv("title", {}, `${utc(r.t, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} UTC${state}: ${key === "mv" ? volts(r.mv) + " V" : r.ma + " mA"}`));
     svg.append(c);
+    if (last) {
+      const tx = x(Date.parse(r.t)), anchor = tx > W - 60 ? "end" : "start";
+      svg.append(sv("text", { class: "val", x: anchor === "end" ? tx - 10 : tx + 10, y: y(r[key]) - 9, "text-anchor": anchor }, key === "mv" ? volts(r.mv) + " V" : r.ma + " mA"));
+    }
   });
   return svg;
 }
 
 function renderBattery(b, sat, t0, t1) {
   const rs = b.readings, last = rs[rs.length - 1];
-  const box = el("div", {});
-  box.append(el("h3", {}, batteryTitle(b.battery)));
-  const v = el("div", { class: "value" }, volts(last.mv));
-  if (last.ma != null) v.append(el("small", {}, (last.ma > 0 ? "+" : "") + last.ma + " mA, " + (Math.abs(last.ma) < 20 ? "idle" : last.ma > 0 ? "charging" : "discharging")));
-  v.append(el("small", {}, "latest beacon " + ago(Date.now() - new Date(last.t))));
-  box.append(v);
-  const vc = chart(rs, "mv", sat.shadows, t0, t1, `${sat.name} ${batteryTitle(b.battery)} voltage over time`);
-  if (vc) box.append(vc);
-  if (rs.some(r => r.ma != null)) {
-    box.append(el("p", { class: "legend" }, "Current (above zero is charging):"));
-    const cc = chart(rs, "ma", sat.shadows, t0, t1, `${sat.name} ${batteryTitle(b.battery)} current over time`);
-    if (cc) box.append(cc);
+  const box = el("div", { class: "batt" });
+  const f = flow(last.ma);
+  box.append(el("div", { class: "bhead" },
+    `<h3>${esc(batteryTitle(b.battery))}</h3><div class="big">${volts(last.mv)}<span>V</span></div>` +
+    (f ? `<span class="flow ${f.cls}">${icon(f.icon)}${f.text}</span>` : "")));
+  box.append(el("p", { class: "sub" }, `Latest beacon ${ago(Date.now() - Date.parse(last.t))}. ${rs.length} beacons in the last ${Math.max(1, Math.round((t1 - Date.parse(rs[0].t)) / 86400000))} days.`));
+  const vc = chart(rs, "mv", sat, t0, t1, `${sat.name} ${batteryTitle(b.battery)} voltage, last three days`);
+  if (vc) { const bx = el("div", { class: "chartbox" }, '<p class="cap">Voltage (volts)</p>'); bx.append(vc); box.append(bx); }
+  if (rs.some((r) => r.ma != null)) {
+    const cc = chart(rs, "ma", sat, t0, t1, `${sat.name} ${batteryTitle(b.battery)} current, last three days`);
+    if (cc) { const bx = el("div", { class: "chartbox" }, '<p class="cap">Current (milliamps, above zero is charging)</p>'); bx.append(cc); box.append(bx); }
   }
-  box.append(el("p", { class: "legend" }, el("span", { class: "swatch" }), "Earth's shadow  ·  filled dot: beacon sent in sunlight  ·  hollow dot: sent in the shadow  ·  the outlined one is the latest"));
-
-  const fired = RULE_ORDER.filter(r => b.anomalies && b.anomalies[r]);
-  if (fired.length) {
-    const ul = el("ul", { class: "rules" });
-    for (const r of fired) ul.append(el("li", { class: "fired" }, RULE_TEXT[r]));
-    box.append(ul);
-  } else {
-    box.append(el("p", { class: "quiet" }, "No alert rule is firing for this battery."));
-  }
-  const det = el("details", {}, el("summary", {}, "Table view (latest 10 beacons)"));
-  const tb = el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Time (UTC)"), el("th", {}, "Volts"), el("th", {}, "Current"), el("th", {}, "Light"))));
-  const body = el("tbody", {});
-  for (const r of rs.slice(-10).reverse()) {
-    body.append(el("tr", {}, el("td", {}, utc(r.t, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })),
-      el("td", {}, volts(r.mv)), el("td", {}, r.ma == null ? "n/a" : r.ma + " mA"),
-      el("td", {}, r.sunlit == null ? "unknown" : r.sunlit ? "sunlight" : "shadow")));
-  }
-  tb.append(body); det.append(tb); box.append(det);
+  const fired = RULE_ORDER.filter((r) => b.anomalies && b.anomalies[r]);
+  if (fired.length) box.append(el("ul", { class: "rules" }, fired.map((r) => `<li>${icon("alert")}<span>${RULE_TEXT[r]}</span></li>`).join("")));
+  else box.append(el("p", { class: "quiet" }, `${icon("check")}No alert rule is firing for this battery.`));
+  const rows = rs.slice(-10).reverse().map((r) => `<tr><td>${utc(r.t, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td><td>${volts(r.mv)} V</td><td>${r.ma == null ? "n/a" : r.ma + " mA"}</td><td>${r.sunlit == null ? "unknown" : r.sunlit ? "sunlight" : "shadow"}</td></tr>`).join("");
+  box.append(el("details", {}, `<summary>Table view, latest 10 beacons</summary><table><thead><tr><th>Time (UTC)</th><th>Voltage</th><th>Current</th><th>Light</th></tr></thead><tbody>${rows}</tbody></table>`));
   return box;
 }
 
-function renderSatellite(sat, now) {
-  const card = el("section", { class: "card" });
-  card.append(el("div", { class: "head" }, el("h2", {}, sat.name), el("span", { class: "norad" }, "NORAD " + sat.norad)));
-  const chips = el("div", { class: "chips" });
-  const anyAlert = (sat.batteries || []).some(b => Object.values(b.anomalies || {}).some(Boolean));
-  if (sat.sunlit_now != null) chips.append(el("span", { class: "chip" }, sat.sunlit_now ? "☀ In sunlight now" : "☾ In the Earth's shadow now"));
-  if (sat.last_beacon) chips.append(el("span", { class: "chip" }, "Last beacon " + ago(now - new Date(sat.last_beacon))));
-  if (anyAlert) chips.append(el("span", { class: "chip alert" }, "⚠ Alert"));
-  else if (sat.stale) chips.append(el("span", { class: "chip alert" }, "⏱ No recent beacons"));
-  else chips.append(el("span", { class: "chip" }, "✓ No alert"));
-  card.append(chips);
+function renderSatellite(sat, snapMs) {
+  const card = el("article", { class: "card" });
+  const anyAlert = (sat.batteries || []).some((b) => Object.values(b.anomalies || {}).some(Boolean));
+  const pill = anyAlert ? ["warn", "alert", "Alert"] : sat.stale ? ["warn", "clock", "No recent beacons"] : ["ok", "check", "All quiet"];
+  card.append(el("header", { class: "card-head" }, `<div><h2>${esc(sat.name)}</h2><span class="norad">NORAD ${sat.norad}</span></div><span class="pill ${pill[0]}">${icon(pill[1])}${pill[2]}</span>`));
+  const sunny = sat.sunlit_now;
+  const last = sat.last_beacon ? `Last beacon ${ago(Date.now() - Date.parse(sat.last_beacon))}` : "No beacon yet";
+  card.append(el("div", { class: "light" },
+    `<div class="orb ${sunny ? "sun" : "moon"}">${icon(sunny ? "sun" : "moon")}</div>` +
+    `<div><strong>${sunny == null ? "Lighting unknown" : sunny ? "In sunlight at the snapshot" : "In the Earth's shadow at the snapshot"}</strong><small>${last}</small></div>`));
+  const tl = el("div", { class: "timeline" }); tl.append(timeline(sat, snapMs)); card.append(tl);
+  card.append(el("p", { class: "key" }, '<span><i style="background:var(--sun)"></i>sunlight</span><span><i style="background:var(--night)"></i>Earth\'s shadow</span><span><i style="background:var(--accent)"></i>a beacon heard</span>'));
   if (sat.stale && sat.last_beacon) card.append(el("p", { class: "note" }, `Nothing heard for longer than ${sat.stale_after_hours} hours, the longest silence this satellite normally has.`));
-  if (sat.error) card.append(el("p", { class: "note" }, "Note: " + sat.error));
-
-  const bats = (sat.batteries || []).filter(b => b.readings && b.readings.length);
+  if (sat.error) card.append(el("p", { class: "note" }, "Note: " + esc(sat.error)));
+  const bats = (sat.batteries || []).filter((b) => b.readings && b.readings.length);
   if (!bats.length) { card.append(el("p", { class: "quiet" }, "No battery readings yet.")); return card; }
-  const t1 = now.getTime();
-  const first = Math.min(...bats.map(b => new Date(b.readings[0].t).getTime()));
-  const t0 = Math.max(first - 3 * 3600000, t1 - 3 * 86400000);
-  for (const b of bats) card.append(renderBattery(b, sat, t0, t1));
+  const first = Math.min(...bats.map((b) => Date.parse(b.readings[0].t)));
+  const t0 = Math.max(first - 3 * 3600000, snapMs - 3 * 86400000);
+  for (const b of bats) card.append(renderBattery(b, sat, t0, snapMs));
   return card;
 }
 
+function renderTiles(snap) {
+  const sats = snap.satellites;
+  const batteries = sats.reduce((n, s) => n + (s.batteries || []).length, 0);
+  const beacons = sats.reduce((n, s) => n + Math.max(0, ...(s.batteries || []).map((b) => b.readings.length)), 0);
+  const alerts = sats.reduce((n, s) => n + (s.batteries || []).filter((b) => Object.values(b.anomalies || {}).some(Boolean)).length + (s.stale ? 1 : 0), 0);
+  const tile = (n, l, cls) => `<div class="tile ${cls || ""}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  document.getElementById("tiles").innerHTML =
+    tile(sats.length, "satellites followed") + tile(batteries, "batteries watched") + tile(beacons.toLocaleString("en-GB"), "beacons in the last two weeks") +
+    (alerts ? tile(alerts, alerts === 1 ? "thing needs a look" : "things need a look", "bad") : tile("0", "alerts: all quiet", "good"));
+}
+
+let snapshot = null;
+function render() {
+  if (!snapshot) return;
+  const snapMs = Date.parse(snapshot.generated_at);
+  document.getElementById("updated").textContent = `Updated ${utc(snapMs, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} UTC, ${ago(Date.now() - snapMs)}. It refreshes every hour.`;
+  renderTiles(snapshot);
+  document.getElementById("cards").replaceChildren(...snapshot.satellites.map((s) => renderSatellite(s, snapMs)));
+}
 async function main() {
   try {
     const res = await fetch("status.json", { cache: "no-store" });
     if (!res.ok) throw new Error("status.json: HTTP " + res.status);
-    const snap = await res.json();
-    const gen = new Date(snap.generated_at), now = new Date();
-    document.getElementById("updated").textContent = `Updated ${utc(gen, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} UTC (${ago(now - gen)}). Refreshed every hour.`;
-    const cards = document.getElementById("cards");
-    for (const sat of snap.satellites) cards.append(renderSatellite(sat, now));
+    snapshot = await res.json();
+    render();
   } catch (e) {
     document.getElementById("updated").textContent = "";
+    document.getElementById("cards").replaceChildren();
     const box = document.getElementById("error");
     box.style.display = "block"; box.textContent = "Could not load the data: " + e.message;
   }
 }
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });
 main();
 </script>
 </body>
