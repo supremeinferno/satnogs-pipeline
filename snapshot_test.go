@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -215,5 +216,40 @@ func TestSnapshotWithoutAnyOrbitDataHasNoLighting(t *testing.T) {
 	s := buildSnapshot(context.Background(), src, nil, []satellite{uwe4(t)}).Satellites[0]
 	if s.SunlitNow != nil || s.TLE != "" {
 		t.Fatalf("%+v", s)
+	}
+}
+
+func TestTracks(t *testing.T) {
+	snap := buildSnapshot(context.Background(), fakeSource(t, uwe4Frames(t), nil, snapNow), nil, []satellite{uwe4(t)})
+	want := int((trackBefore+trackAfter)/trackStep) + 1
+	if len(snap.Sun) != want || snap.TrackStepS != 30 || !snap.TrackStart.Equal(snapNow.Add(-trackBefore)) {
+		t.Fatalf("%d sun points, step %d, start %s", len(snap.Sun), snap.TrackStepS, snap.TrackStart)
+	}
+	// The point under the Sun at noon UTC on 22 October: the declination is
+	// about -11.2 degrees, and the Sun runs about 15.5 minutes ahead of the
+	// clock (the equation of time), so it is 3.9 degrees west of Greenwich.
+	noon := snap.Sun[int(trackBefore/trackStep)]
+	if math.Abs(noon[0]+11.2) > 0.4 || math.Abs(noon[1]+3.9) > 0.5 {
+		t.Errorf("Sun overhead at %v, want about -11.2, -3.9", noon)
+	}
+	track := snap.Satellites[0].Track
+	if len(track) != want {
+		t.Fatalf("%d track points, want %d", len(track), want)
+	}
+	shadow := 0
+	for i, p := range track {
+		if p[2] < 350 || p[2] > 450 {
+			t.Fatalf("point %d: altitude %v km", i, p[2])
+		}
+		if i > 0 && math.Abs(p[0]-track[i-1][0]) > 2.5 { // 7.7 km/s for 30 s is about 2 degrees
+			t.Fatalf("point %d: latitude jumps from %v to %v", i, track[i-1][0], p[0])
+		}
+		if p[3] == 0 {
+			shadow++
+		}
+	}
+	// A 93-minute orbit spends about a third of it in the shadow.
+	if f := float64(shadow) / float64(len(track)); f < 0.25 || f > 0.45 {
+		t.Errorf("in the shadow %.0f%% of the time", 100*f)
 	}
 }

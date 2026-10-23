@@ -9,10 +9,15 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
 	"time"
+
+	"github.com/supremeinferno/orbitscreen/pkg/sgp4"
+
+	"github.com/supremeinferno/satnogs-pipeline/internal/orbit"
 )
 
 // siteIndex is the page that shows status.json. It is a single file with its
@@ -26,6 +31,10 @@ const (
 	shadowWindow    = 5 * 24 * time.Hour  // how far back the shadow is drawn
 	firstPages      = 10                  // pages (25 frames each) read when there is no earlier snapshot
 	nextPages       = 3                   // ...and when there is one: only what is new
+	trackBefore     = 15 * time.Minute    // the globe's tracks start this long before the snapshot
+	trackAfter      = 3 * time.Hour       // ...and end this long after, past the next hourly run
+	trackStep       = 30 * time.Second
+	meanEarthKm     = 6371.0 // the globe's Earth: a sphere of the mean radius
 )
 
 // The status.json format. The page reads it; so does the next run, which adds
@@ -35,6 +44,11 @@ const (
 type snapshot struct {
 	GeneratedAt time.Time       `json:"generated_at"`
 	Satellites  []snapSatellite `json:"satellites"`
+	// For the globe on the page: each satellite's Track and the point under
+	// the Sun, every TrackStepS seconds from TrackStart.
+	TrackStart time.Time    `json:"track_start"`
+	TrackStepS int          `json:"track_step_s"`
+	Sun        [][2]float64 `json:"sun,omitempty"` // latitude, longitude (degrees)
 }
 
 type snapSatellite struct {
@@ -48,7 +62,11 @@ type snapSatellite struct {
 	Stale           bool           `json:"stale"`
 	Error           string         `json:"error,omitempty"`
 	Shadows         [][2]time.Time `json:"shadows,omitempty"` // when the satellite was in the Earth's shadow
-	Batteries       []snapBattery  `json:"batteries"`
+	// Where it will be: latitude, longitude (degrees), altitude (km), and 1 in
+	// sunlight or 0 in the shadow, from the same SGP4 and shadow model as the
+	// rules. Made fresh each run, not merged.
+	Track     [][4]float64  `json:"track,omitempty"`
+	Batteries []snapBattery `json:"batteries"`
 }
 
 type snapBattery struct {
@@ -91,8 +109,64 @@ func buildSnapshot(ctx context.Context, src snapSource, prev *snapshot, sats []s
 		}
 		out.Satellites = append(out.Satellites, buildSatellite(ctx, src, sat, old))
 	}
+	addTracks(out)
 	return out
 }
+
+// addTracks fills in where the satellites and the Sun will be, from the element
+// set each satellite carries. One start time for all, so the page can step
+// through them together.
+func addTracks(snap *snapshot) {
+	start := snap.GeneratedAt.Add(-trackBefore).Truncate(trackStep)
+	n := int((trackBefore+trackAfter)/trackStep) + 1
+	snap.TrackStart, snap.TrackStepS = start, int(trackStep/time.Second)
+	snap.Sun = make([][2]float64, n)
+	for i := range n {
+		t := start.Add(time.Duration(i) * trackStep)
+		lat, lon, _ := earthFixed(orbit.SunPosition(t), t)
+		snap.Sun[i] = [2]float64{round2(lat), round2(lon)}
+	}
+	for i := range snap.Satellites {
+		ss := &snap.Satellites[i]
+		if ss.TLE == "" {
+			continue
+		}
+		t, err := parseTLE(ss.TLE)
+		if err != nil {
+			continue
+		}
+		m, err := newOrbitModel(t)
+		if err != nil {
+			continue
+		}
+		var track [][4]float64
+		for j := range n {
+			at := start.Add(time.Duration(j) * trackStep)
+			r, _, err := m.sat.PropagateTo(at)
+			if err != nil {
+				break // a decayed orbit: the track ends here
+			}
+			lat, lon, alt := earthFixed(r, at)
+			lit := 0.0
+			if orbit.InSunlight(r, at) {
+				lit = 1
+			}
+			track = append(track, [4]float64{round2(lat), round2(lon), math.Round(alt), lit})
+		}
+		ss.Track = track
+	}
+}
+
+// earthFixed turns a position in SGP4's frame (km) into latitude and longitude
+// (degrees) over a spherical Earth, as the globe draws it, and altitude (km).
+func earthFixed(r [3]float64, t time.Time) (lat, lon, alt float64) {
+	d := math.Sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2])
+	lat = math.Asin(r[2]/d) * 180 / math.Pi
+	lon = math.Remainder(math.Atan2(r[1], r[0])-sgp4.GMST(t), 2*math.Pi) * 180 / math.Pi
+	return lat, lon, d - meanEarthKm
+}
+
+func round2(x float64) float64 { return math.Round(x*100) / 100 }
 
 func buildSatellite(ctx context.Context, src snapSource, sat satellite, old *snapSatellite) snapSatellite {
 	now := src.now().UTC()
