@@ -49,8 +49,12 @@ type satellite struct {
 	// any light. Satellites without it are only watched against their own
 	// baseline.
 	LowMV int
-	// StaleAfter is how long without a beacon is worth an alert. Satellites
-	// are heard at very different rates.
+	// StaleAfter is how long without a beacon is worth an alert. Satellites are
+	// heard at very different rates, so it is set from the largest gap seen in
+	// the stored beacons (23 Oct 2026): UWE-4 7.7 h over 5 days, SNUGLITE 7.7 h
+	// over 1.4 days, CatSat 9.0 h over 0.9 days, Sharjahsat-1 45.2 h over 9 days
+	// (few of its packets carry a battery). At least twice the largest gap, and
+	// 24 h where there are under three days of history. Revisit as data grows.
 	StaleAfter time.Duration
 }
 
@@ -73,7 +77,7 @@ var satellites = []satellite{
 			batterySpec{Voltage: "BatteryVoltage", VoltageScale: 1, MinMV: 4000, MaxMV: 12000}),
 	},
 	{
-		NORAD: 55104, Name: "Sharjahsat-1", StaleAfter: 24 * time.Hour,
+		NORAD: 55104, Name: "Sharjahsat-1", StaleAfter: 96 * time.Hour,
 		// "x*0.008993 [V]" in the definition: about 7.9 V, a two-cell pack.
 		Decode: kaitaiDecoder(func(s *kaitai.Stream) (any, error) { var v sharjahsat1.Sharjahsat1; return &v, v.Read(s, nil, &v) },
 			batterySpec{Voltage: "Vbat", VoltageScale: 8.993, MinMV: 4000, MaxMV: 12000}),
