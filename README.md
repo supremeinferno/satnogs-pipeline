@@ -98,11 +98,13 @@ go test ./...
 
 `snapshot` writes `status.json` and a single-page site: for each satellite whether it is in sunlight or in the Earth's shadow right now, when it last sent a beacon, its battery voltage (and current, where its sign is checked) over the last three days with the shadow shaded and the shadow beacons drawn hollow, and which rules, if any, are firing. A table view is under each chart. The page is light and dark and works on a phone.
 
+At the top is a 3D globe ([three.js](https://threejs.org/)): the Earth lit by the Sun, the Earth's shadow drawn as the cylinder that `watch` uses, and the satellites moving in real time along their orbits, coloured by sunlight, shadow or alert, with their latest voltage. A slider and a Play button run the next three hours. The browser does no orbit maths: `snapshot` writes each satellite's track into `status.json` (position and lighting every 30 seconds, from 15 minutes before the run to 3 hours after), with the same SGP4 and shadow model as the alerts, and the page only interpolates. A test checks the frame conversion against the Sun: at noon UTC on 22 October it is overhead at 11.2° S, 3.9° W. Without WebGL, or with an older `status.json`, the page shows the same cards without the globe.
+
 The workflow `.github/workflows/status-site.yml` builds and publishes it on GitHub Pages every hour. The job has no database: each run downloads the `status.json` the last run published, adds the newest beacons (3 pages per satellite instead of 10) to its readings, and publishes the result, so the history that the baseline rule needs builds up over the days. A satellite that cannot be fetched keeps its old readings and shows why.
 
 **Live: https://supremeinferno.github.io/satnogs-pipeline/** (switched on 23 Oct 2026). It needs the repository secret `SATNOGS_DB_TOKEN` (an account token for db.satnogs.org) and Pages set to "GitHub Actions"; without the secret the workflow does nothing and succeeds.
 
-Orbit data comes from SatNOGS DB first, then CelesTrak, then the previous run's copy. On the first run every CelesTrak request from GitHub's servers timed out, which is why SatNOGS is first. Which source the Actions runs actually end up using is not yet confirmed: the first runs after the change showed 21 October element sets, which look like CelesTrak's.
+Orbit data comes from SatNOGS DB first, then CelesTrak, then the previous run's copy. On the first run every CelesTrak request from GitHub's servers timed out, which is why SatNOGS is first. A run logs a line only when it had to fall back; the run of 23 October at 15:06 UTC logged none, so SatNOGS DB answered for all five satellites.
 
 ```sh
 SATNOGS_DB_TOKEN=... go run . snapshot -out _site    # then open _site/index.html through any web server
