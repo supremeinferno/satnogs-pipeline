@@ -98,7 +98,9 @@ go test ./...
 
 The workflow `.github/workflows/status-site.yml` builds and publishes it on GitHub Pages every hour. The job has no database: each run downloads the `status.json` the last run published, adds the newest beacons (3 pages per satellite instead of 10) to its readings, and publishes the result, so the history that the baseline rule needs builds up over the days. A satellite that cannot be fetched keeps its old readings and shows why.
 
-To switch it on, the repository needs the secret `SATNOGS_DB_TOKEN` (an account token for db.satnogs.org) and Pages set to "GitHub Actions". Until the secret exists the workflow does nothing and succeeds. **It is not switched on yet.**
+**Live: https://supremeinferno.github.io/satnogs-pipeline/** (switched on 23 Oct 2026). It needs the repository secret `SATNOGS_DB_TOKEN` (an account token for db.satnogs.org) and Pages set to "GitHub Actions"; without the secret the workflow does nothing and succeeds.
+
+Orbit data comes from SatNOGS DB first, then CelesTrak, then the previous run's copy. On the first run every CelesTrak request from GitHub's servers timed out, which is why SatNOGS is first. Which source the Actions runs actually end up using is not yet confirmed: the first runs after the change showed 21 October element sets, which look like CelesTrak's.
 
 ```sh
 SATNOGS_DB_TOKEN=... go run . snapshot -out _site    # then open _site/index.html through any web server
