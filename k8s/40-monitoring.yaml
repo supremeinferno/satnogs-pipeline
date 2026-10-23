@@ -57,7 +57,7 @@ spec:
     spec:
       containers:
         - name: alertmanager
-          image: prom/alertmanager:v0.28.1
+          image: prom/alertmanager:v0.34.1
           args: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
           ports:
             - {name: http, containerPort: 9093}
@@ -93,7 +93,7 @@ spec:
     spec:
       containers:
         - name: prometheus
-          image: prom/prometheus:v3.5.0
+          image: prom/prometheus:v3.15.0
           args: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.enable-lifecycle"]
           ports:
             - {name: http, containerPort: 9090}
@@ -129,7 +129,7 @@ spec:
     spec:
       containers:
         - name: grafana
-          image: grafana/grafana:11.2.0
+          image: grafana/grafana:13.2.4
           env:
             # Local development only: no login, everyone can only view the provisioned dashboard.
             - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "true"}
