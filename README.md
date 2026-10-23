@@ -92,6 +92,20 @@ go test ./...
 
 `fetch` flags: `-interval` (0 = once), `-norad` (satellite catalog number, 0 = all; default 25544, the ISS), `-max-pages` (25 observations per page). Connections come from `DATABASE_URL` and `AMQP_URL`, defaulting to the ones in `docker-compose.yml`. The RabbitMQ management UI is at http://localhost:15672 (user and password `satnogs`).
 
+## Status page
+
+`snapshot` writes `status.json` and a single-page site: for each satellite whether it is in sunlight or in the Earth's shadow right now, when it last sent a beacon, its battery voltage (and current, for UWE-4) over the last three days with the shadow shaded and the shadow beacons drawn hollow, and which rules, if any, are firing. A table view is under each chart. The page is light and dark and works on a phone.
+
+The workflow `.github/workflows/status-site.yml` builds and publishes it on GitHub Pages every hour. The job has no database: each run downloads the `status.json` the last run published, adds the newest beacons (3 pages per satellite instead of 10) to its readings, and publishes the result, so the history that the baseline rule needs builds up over the days. A satellite that cannot be fetched keeps its old readings and shows why.
+
+To switch it on, the repository needs the secret `SATNOGS_DB_TOKEN` (an account token for db.satnogs.org) and Pages set to "GitHub Actions". Until the secret exists the workflow does nothing and succeeds. **It is not switched on yet.**
+
+```sh
+SATNOGS_DB_TOKEN=... go run . snapshot -out _site    # then open _site/index.html through any web server
+```
+
+It is refreshed hourly, not live: a page that updates every second would need a server that is always on.
+
 ## Failure tests
 
 `scripts/chaos.sh` breaks the pipeline on purpose and checks that it recovers. It starts PostgreSQL, RabbitMQ and `store`, feeds made-up observations straight into the queue (the SatNOGS API is not called), and checks the database and the queues after each break:

@@ -1,0 +1,80 @@
+# Builds the status page (status.json and index.html, from `snapshot`) every
+# hour and publishes it on GitHub Pages.
+#
+# It needs the repository secret SATNOGS_DB_TOKEN (an account token for
+# db.satnogs.org) and Pages set to "GitHub Actions". Without the secret it
+# does nothing and succeeds, so it can be merged before either exists.
+#
+# The job keeps no state of its own. Each run downloads the status.json the
+# last run published, adds the newest beacons to its readings, and publishes
+# the result, so the history (which the baseline rule needs) builds up.
+name: status-site
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/status-site.yml']
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One run at a time: a slow run (the SatNOGS API rate-limits) must not overlap the next.
+concurrency:
+  group: status-site
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.token.outputs.configured }}
+    steps:
+      - id: token
+        env:
+          SATNOGS_DB_TOKEN: ${{ secrets.SATNOGS_DB_TOKEN }}
+        run: |
+          if [ -n "$SATNOGS_DB_TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SATNOGS_DB_TOKEN is not set, so the status page is not built."
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # What the last run published. Missing the first time, which is fine.
+      - name: Download the last status.json
+        run: curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/status.json" -o previous.json || rm -f previous.json
+      # CelesTrak asks for the same element set at most every couple of hours.
+      - id: slot
+        run: echo "slot=$(( $(date +%s) / 7200 ))" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: tle
+          key: celestrak-${{ steps.slot.outputs.slot }}
+      - name: Build the snapshot
+        env:
+          SATNOGS_DB_TOKEN: ${{ secrets.SATNOGS_DB_TOKEN }}
+        run: go run . snapshot -out _site -previous previous.json -tle-cache tle
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v5

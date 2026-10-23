@@ -45,7 +45,7 @@ h3 { font-size: 1rem; margin: 20px 0 4px; }
 .quiet { color: var(--muted); margin: 4px 0 0; font-size: .9rem; }
 svg.chart { width: 100%; height: auto; display: block; margin-top: 8px; }
 svg .bg { fill: var(--card); } svg .band { fill: var(--shadow); } svg .grid { stroke: var(--grid); stroke-width: 1; }
-svg .dot { fill: var(--series); stroke: var(--card); stroke-width: 2; } svg .dot.last { stroke: var(--ink); stroke-width: 2; }
+svg .dot { fill: var(--series); stroke: var(--card); stroke-width: 2; } svg .dot.shade { fill: var(--card); stroke: var(--series); stroke-width: 2; } svg .dot.last { stroke: var(--ink); stroke-width: 2.5; }
 svg .ring { fill: none; stroke: var(--alert); stroke-width: 2; }
 svg text { fill: var(--muted); font-size: 11px; font-family: inherit; } svg text.strong { fill: var(--ink); font-weight: 600; }
 svg .zero { stroke: var(--axis); stroke-dasharray: 4 3; }
@@ -69,7 +69,7 @@ footer p { margin: 0 0 8px; max-width: 75ch; } a { color: var(--series); }
   <div id="error"></div>
   <div id="cards"></div>
   <footer>
-    <p><strong>How to read this.</strong> Each dot is one beacon a satellite sent. The shaded stretches are when the satellite was in the Earth's shadow, worked out from its orbit and the Sun's position (not from the battery). A healthy battery stays up in the light and sags in the shadow.</p>
+    <p><strong>How to read this.</strong> Each dot is one beacon a satellite sent, over the last three days. The shaded stretches are when the satellite was in the Earth's shadow, worked out from its orbit and the Sun's position (not from the battery). Hollow dots were sent in the shadow, filled ones in sunlight. A healthy battery stays up in the light and sags in the shadow.</p>
     <p><strong>What this is not.</strong> A learning project, not an operations tool. It is refreshed every hour, not live. The rules were checked against a few days of real data and have not yet been shown to catch a real fault. Some voltage units are taken from the satellite's published format or assumed from the size of the numbers.</p>
     <p>Code and the full story: <a href="https://github.com/supremeinferno/satnogs-pipeline">satnogs-pipeline</a>, which uses the orbit model of <a href="https://github.com/supremeinferno/orbitscreen">orbitscreen</a>. Beacons from <a href="https://satnogs.org/">SatNOGS</a>, orbit data from <a href="https://celestrak.org/">CelesTrak</a>.</p>
   </footer>
@@ -108,9 +108,18 @@ function volts(mv) { return (mv / 1000).toFixed(2) + " V"; }
 function utc(t, opts) { return new Date(t).toLocaleString("en-GB", Object.assign({ timeZone: "UTC" }, opts)); }
 function batteryTitle(name) { return name === "main" ? "Battery" : "Battery " + name.toUpperCase(); }
 
+// niceTicks returns about n round values between lo and hi, and their step.
+function niceTicks(lo, hi, n) {
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag, out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return { ticks: out, step };
+}
+
 // chart draws readings (key "mv" or "ma") against time, with the shadow shaded.
 function chart(readings, key, shadows, t0, t1, label) {
-  const W = 720, H = key === "mv" ? 210 : 150, L = 56, R = 14, T = 10, B = 26;
+  // Drawn at the width it is shown at, so the labels keep their size on a phone.
+  const W = Math.min(720, Math.max(300, document.documentElement.clientWidth - 66)), H = key === "mv" ? 210 : 150, L = 52, R = 12, T = 10, B = 26;
   const pts = readings.filter(r => r[key] != null && new Date(r.t) >= t0);
   if (!pts.length) return null;
   const vals = pts.map(r => r[key]);
@@ -127,11 +136,12 @@ function chart(readings, key, shadows, t0, t1, label) {
     const xa = Math.max(L, x(a)), xb = Math.min(W - R, x(b));
     if (xb > xa) svg.append(sv("rect", { class: "band", x: xa, y: T, width: xb - xa, height: H - T - B }));
   }
-  const step = (hi - lo) / 3;
-  for (let i = 0; i <= 3; i++) {
-    const v = lo + step * i, yy = y(v);
+  const { ticks, step } = niceTicks(lo, hi, 4);
+  const decimals = Math.max(0, Math.ceil(-Math.log10(step / 1000) - 1e-9));
+  for (const v of ticks) {
+    const yy = y(v);
     svg.append(sv("line", { class: "grid", x1: L, x2: W - R, y1: yy, y2: yy }));
-    svg.append(sv("text", { x: L - 6, y: yy + 4, "text-anchor": "end" }, key === "mv" ? (v / 1000).toFixed(2) : Math.round(v)));
+    svg.append(sv("text", { x: L - 6, y: yy + 4, "text-anchor": "end" }, key === "mv" ? (v / 1000).toFixed(decimals) : Math.round(v)));
   }
   if (key === "ma") svg.append(sv("line", { class: "zero", x1: L, x2: W - R, y1: y(0), y2: y(0) }));
   const day = 86400000;
@@ -142,7 +152,7 @@ function chart(readings, key, shadows, t0, t1, label) {
   svg.append(sv("text", { x: 12, y: T + (H - T - B) / 2, transform: `rotate(-90 12 ${T + (H - T - B) / 2})`, "text-anchor": "middle" }, key === "mv" ? "volts" : "milliamps"));
   pts.forEach((r, i) => {
     const last = i === pts.length - 1;
-    const c = sv("circle", { class: "dot" + (last ? " last" : ""), cx: x(r.t), cy: y(r[key]), r: last ? 5 : 3.5 });
+    const c = sv("circle", { class: "dot" + (r.sunlit === false ? " shade" : "") + (last ? " last" : ""), cx: x(r.t), cy: y(r[key]), r: last ? 5 : 3.5 });
     const state = r.sunlit == null ? "" : r.sunlit ? ", in sunlight" : ", in the Earth's shadow";
     c.append(sv("title", {}, `${utc(r.t, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} UTC${state}: ${key === "mv" ? volts(r.mv) : r.ma + " mA"}`));
     svg.append(c);
@@ -155,7 +165,7 @@ function renderBattery(b, sat, t0, t1) {
   const box = el("div", {});
   box.append(el("h3", {}, batteryTitle(b.battery)));
   const v = el("div", { class: "value" }, volts(last.mv));
-  if (last.ma != null) v.append(el("small", {}, (last.ma > 0 ? "+" : "") + last.ma + " mA, " + (last.ma > 0 ? "charging" : last.ma < 0 ? "discharging" : "idle")));
+  if (last.ma != null) v.append(el("small", {}, (last.ma > 0 ? "+" : "") + last.ma + " mA, " + (Math.abs(last.ma) < 20 ? "idle" : last.ma > 0 ? "charging" : "discharging")));
   v.append(el("small", {}, "latest beacon " + ago(Date.now() - new Date(last.t))));
   box.append(v);
   const vc = chart(rs, "mv", sat.shadows, t0, t1, `${sat.name} ${batteryTitle(b.battery)} voltage over time`);
@@ -165,7 +175,7 @@ function renderBattery(b, sat, t0, t1) {
     const cc = chart(rs, "ma", sat.shadows, t0, t1, `${sat.name} ${batteryTitle(b.battery)} current over time`);
     if (cc) box.append(cc);
   }
-  box.append(el("p", { class: "legend" }, el("span", { class: "swatch" }), "Earth's shadow  ·  each dot is one beacon, the outlined one is the latest"));
+  box.append(el("p", { class: "legend" }, el("span", { class: "swatch" }), "Earth's shadow  ·  filled dot: beacon sent in sunlight  ·  hollow dot: sent in the shadow  ·  the outlined one is the latest"));
 
   const fired = RULE_ORDER.filter(r => b.anomalies && b.anomalies[r]);
   if (fired.length) {
@@ -205,7 +215,7 @@ function renderSatellite(sat, now) {
   if (!bats.length) { card.append(el("p", { class: "quiet" }, "No battery readings yet.")); return card; }
   const t1 = now.getTime();
   const first = Math.min(...bats.map(b => new Date(b.readings[0].t).getTime()));
-  const t0 = Math.max(first - 3 * 3600000, t1 - 5 * 86400000);
+  const t0 = Math.max(first - 3 * 3600000, t1 - 3 * 86400000);
   for (const b of bats) card.append(renderBattery(b, sat, t0, t1));
   return card;
 }
