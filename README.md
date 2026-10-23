@@ -1,6 +1,6 @@
 # satnogs-pipeline
 
-Reads the radio telemetry of real CubeSats from volunteer ground stations, decodes it, stores it, and raises an alert when a battery misbehaves. Four satellites so far: [UWE-4](https://en.wikipedia.org/wiki/UWE-4) (University of Würzburg), CatSat, SNUGLITE and Sharjahsat-1. The alert knows whether the satellite is in sunlight or in the Earth's shadow, because a battery is supposed to discharge in the shadow.
+Reads the radio telemetry of real CubeSats from volunteer ground stations, decodes it, stores it, and raises an alert when a battery misbehaves. Five satellites so far: [UWE-4](https://en.wikipedia.org/wiki/UWE-4) (University of Würzburg), CatSat, SNUGLITE, Sharjahsat-1 and GRBBeta. The alert knows whether the satellite is in sunlight or in the Earth's shadow, because a battery is supposed to discharge in the shadow.
 
 ![Battery A current of UWE-4 (the satellite with the longest checked history) by lighting: 0 of 60 beacons in the Earth's shadow are charging, 61 of 77 in sunlight are](docs/img/battery-current.svg)
 
@@ -32,7 +32,7 @@ Measured on real data from 14 to 22 October 2026, unless it says otherwise. The 
 
 | | |
 |---|---|
-| Satellites | 4 satellites, 5 batteries, 366 distinct beacons stored: UWE-4 (2 batteries, voltage, current, temperature, charge), CatSat and Sharjahsat-1 (voltage and current), SNUGLITE (voltage only). |
+| Satellites | 5 satellites, 6 batteries: UWE-4 (2 batteries, voltage, current, temperature, charge), CatSat and Sharjahsat-1 (voltage and current), SNUGLITE and GRBBeta (voltage only). 366 distinct beacons stored by 22 October, before GRBBeta was added on the 23rd. |
 | Lighting model against the batteries | In the shadow, **0 of 60** beacons were charging. In sunlight, 61 of 77 were. |
 | Battery rules on the same history | Replayed at each of the 137 UWE-4 readings, "discharging in sunlight" and "low voltage" never fired. The "below its own baseline" rule gave 14 false alarms in 138 readings with a short baseline and none with the one it has now, but it was only active for about two days of that history: see [Battery watch](#battery-watch). |
 | Same rule on made-up readings | Three in the shadow at -300 mA (what "current is negative" would flag): no alert. Three in sunlight at -120 mA: alert, delivered to Telegram, resolved when removed. |
@@ -50,7 +50,8 @@ Measured on real data from 14 to 22 October 2026, unless it says otherwise. The 
 - Most satellites' frames are no use: Morse code and APRS text carry no battery data. 75 satellites were scanned (slowly, because of that rate limit) to find one with a binary, documented beacon.
 - The first version of the "below its own baseline" rule (4% under the median of 8 or more readings) fired 14 times in 138 UWE-4 readings. Its sunlit voltage sits at 4.20 V when charging and near 4.05 V when not, and a short baseline sees one of the two. The rule now needs 40 readings over 3 days.
 - The format definitions I wanted to turn into decoders are AGPL-3.0, which I only checked after planning to use them. The project is AGPL-3.0 now; see [License](#license).
-- Not every format can be generated: Celesta's Go parser does not compile (the generator puts -1 into a uint8). Each satellite has to be tried.
+- Not every format can be generated: Celesta's Go parser does not compile (the generator puts -1 into a uint8). Each satellite has to be tried. GRBBeta's did not compile either: its definition switches on the first 8 bytes of a frame (`0x6465206861326772`, "de ha2gr"), and the YAML reader turned that into a JavaScript number and lost its last digits. [`gen.js`](scripts/kaitai/gen.js) now keeps such numbers exact.
+- The frames SatNOGS DB files under UNISAT-6 are UNISAT-7's: 200 of 200 recent ones start with "US7" or the text "UniSat-7", and UNISAT-6's format expects "US6". There is no UNISAT-7 definition, so neither is watched.
 - Sharjahsat-1's battery current has the opposite sign to UWE-4's and CatSat's: positive means discharging. Its format definition does not say so; only the lighting did.
 - One beacon with the battery discharging in sunlight is not an anomaly: 8 of 77 sunlit beacons do it, for a few tens of mA. The rule asks for three, 30 minutes apart.
 
@@ -235,7 +236,7 @@ In the shadow the battery was never charging. The 8 sunlit readings that dischar
 | Telemetry stale | every satellite | no beacon stored for longer than that satellite's limit, at least twice the largest gap seen (UWE-4: 12 hours, largest gap 7.7; Sharjahsat-1: 96 hours, largest gap 45.2, because few of its packets carry a battery; the others 24 hours on under three days of history) |
 | Orbit data stale | every satellite | the TLE is more than 10 days old; the rules that need the lighting are then switched off |
 
-How far each rule has been checked, plainly: "discharging in sunlight" has been checked against real data and against made-up readings. "Below its own baseline" is the weakest. No real anomaly has been seen, so it has never fired for a true reason; on real data it stayed quiet, but UWE-4's battery A was the only one with enough history to activate it, and only for about two days. Its first, simpler version gave 14 false alarms, which is how the long baseline came about. Treat it as a rule that has not yet been shown to work. The other satellites' voltage units are the definitions' (CatSat in millivolts, Sharjahsat-1 as 0.008993 V per unit); SNUGLITE's unit is assumed to be millivolts from the size of the numbers (about 8.3 V for two cells), which the baseline rule does not depend on. Sharjahsat-1's beacons with a battery are rare (17 of its frames in 9 days).
+How far each rule has been checked, plainly: "discharging in sunlight" has been checked against real data and against made-up readings. "Below its own baseline" is the weakest. No real anomaly has been seen, so it has never fired for a true reason; on real data it stayed quiet, but UWE-4's battery A was the only one with enough history to activate it, and only for about two days. Its first, simpler version gave 14 false alarms, which is how the long baseline came about. Treat it as a rule that has not yet been shown to work. The other satellites' voltage units are the definitions' (CatSat in millivolts, Sharjahsat-1 as 0.008993 V per unit); SNUGLITE's and GRBBeta's units are assumed to be millivolts from the size of the numbers (about 8.3 V for two cells, and 16.6 to 16.8 V for four cells near full), which the baseline rule does not depend on. Sharjahsat-1's beacons with a battery are rare (17 of its frames in 9 days).
 
 **CatSat and Sharjahsat-1's current**, checked the same way on 23 October 2026 (the stored frames decoded again, lighting from SGP4; "charging" is above 20 mA):
 
@@ -256,7 +257,7 @@ Limits: the shadow is a cylinder, not the real cone with penumbra, which matters
 - Many recent observations are `unknown` until someone vets them. Observations older than the first page with no changes are not re-checked, so a late status change on an old row is missed.
 - Observation frame data (`demoddata`) are links to files, not JSON; the telemetry API returns the raw frames directly.
 - The telemetry API returns raw frames only: its `decoded` field is empty or just `"influxdb"`, so decoding is done here. Many satellites there send Morse (CW) or APRS text; UWE-4 sends binary beacons with a documented layout (SatNOGS's Kaitai definition), which is why it was chosen.
-- `testdata/*_frames.txt` hold real frames from the SatNOGS DB API (UWE-4, CatSat, SNUGLITE, Sharjahsat-1). Check the data licence of SatNOGS DB before reusing them.
+- `testdata/*_frames.txt` hold real frames from the SatNOGS DB API (UWE-4, CatSat, SNUGLITE, Sharjahsat-1, GRBBeta). Check the data licence of SatNOGS DB before reusing them.
 - `observation_id` is 0 for frames not uploaded through SatNOGS Network; they are real frames and are stored with a NULL observation.
 - A poll that fails part-way (for example on a 429) makes the next poll read all pages again instead of stopping at the first page with nothing new, so the pages it never reached are not lost.
 

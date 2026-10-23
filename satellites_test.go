@@ -53,6 +53,7 @@ func TestSatelliteDecodersOnRealFrames(t *testing.T) {
 		{"catsat", 60246, []int{16303, 15524}, []int{170, -340}},
 		{"snuglite", 43784, []int{8315, 8277}, nil},
 		{"sharjahsat1", 55104, []int{7905}, []int{103}}, // raw 879 x 8.993 mV; raw -7 x -14.66 mA, in sunlight
+		{"grbbeta", 60237, []int{16693}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -105,7 +106,7 @@ func TestSatelliteDecodersNeverPanic(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	for _, sat := range satellites {
 		var real [][]byte
-		for _, name := range []string{"catsat", "snuglite", "sharjahsat1", "uwe4"} {
+		for _, name := range []string{"catsat", "snuglite", "sharjahsat1", "grbbeta", "uwe4"} {
 			if name == "uwe4" {
 				for _, f := range realFrames(t) {
 					real = append(real, f)

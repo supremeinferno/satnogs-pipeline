@@ -12,6 +12,7 @@ import (
 	"github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
 
 	"github.com/supremeinferno/satnogs-pipeline/internal/decoders/catsat"
+	"github.com/supremeinferno/satnogs-pipeline/internal/decoders/grbbeta"
 	"github.com/supremeinferno/satnogs-pipeline/internal/decoders/sharjahsat1"
 	"github.com/supremeinferno/satnogs-pipeline/internal/decoders/snuglite"
 )
@@ -53,8 +54,9 @@ type satellite struct {
 	// heard at very different rates, so it is set from the largest gap seen in
 	// the stored beacons (23 Oct 2026): UWE-4 7.7 h over 5 days, SNUGLITE 7.7 h
 	// over 1.4 days, CatSat 9.0 h over 0.9 days, Sharjahsat-1 45.2 h over 9 days
-	// (few of its packets carry a battery). At least twice the largest gap, and
-	// 24 h where there are under three days of history. Revisit as data grows.
+	// (few of its packets carry a battery); GRBBeta had 2 hours of history. At
+	// least twice the largest gap, and 24 h where there are under three days of
+	// history. Revisit as data grows.
 	StaleAfter time.Duration
 }
 
@@ -88,6 +90,14 @@ var satellites = []satellite{
 		// days). So the scale is negated.
 		Decode: kaitaiDecoder(func(s *kaitai.Stream) (any, error) { var v sharjahsat1.Sharjahsat1; return &v, v.Read(s, nil, &v) },
 			batterySpec{Voltage: "Vbat", VoltageScale: 8.993, MinMV: 4000, MaxMV: 12000, Current: "Ibat", CurrentScale: -14.662757}),
+	},
+	{
+		NORAD: 60237, Name: "GRBBeta", StaleAfter: 24 * time.Hour,
+		// "Battery voltage", no unit in the definition; as millivolts the readings
+		// (16.6 to 16.8 V) are a four-cell pack near full. Charge and discharge
+		// currents are two separate fields, not used yet.
+		Decode: kaitaiDecoder(func(s *kaitai.Stream) (any, error) { var v grbbeta.Grbbeta; return &v, v.Read(s, nil, &v) },
+			batterySpec{Voltage: "BatVolt", VoltageScale: 1, MinMV: 8000, MaxMV: 20000}),
 	},
 }
 
