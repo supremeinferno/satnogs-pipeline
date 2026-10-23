@@ -15,27 +15,34 @@ import (
 // once every couple of hours.
 var celestrakURL = "https://celestrak.org/NORAD/elements/gp.php"
 
-// fetchTLE gets the current element set of one satellite.
-func fetchTLE(ctx context.Context, norad int) (*tle.TLE, error) {
+// fetchTLEText gets the current element set of one satellite as CelesTrak
+// sends it: a name and two lines.
+func fetchTLEText(ctx context.Context, norad int) (string, error) {
 	url := fmt.Sprintf("%s?CATNR=%d&FORMAT=tle", celestrakURL, norad)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	req.Header.Set("User-Agent", "satnogs-pipeline (learning project)")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("get %s: %w", url, err)
+		return "", fmt.Errorf("get %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 	if err := checkStatus(resp); err != nil {
-		return nil, fmt.Errorf("get %s: %w", url, err)
+		return "", fmt.Errorf("get %s: %w", url, err)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+	return string(body), err
+}
+
+// fetchTLE gets and parses the current element set of one satellite.
+func fetchTLE(ctx context.Context, norad int) (*tle.TLE, error) {
+	text, err := fetchTLEText(ctx, norad)
 	if err != nil {
 		return nil, err
 	}
-	return parseTLE(string(body))
+	return parseTLE(text)
 }
 
 // parseTLE reads the three-line form: a name, then the two element lines.
