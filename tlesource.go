@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -121,6 +122,9 @@ func fetchTLETextAny(ctx context.Context, norad int) (string, error) {
 		cancel()
 		if err == nil {
 			if _, err = parseTLE(text); err == nil {
+				if len(errs) > 0 {
+					log.Printf("orbit data for %d from %s, after: %v", norad, src.name, errors.Join(errs...))
+				}
 				return text, nil
 			}
 		}
