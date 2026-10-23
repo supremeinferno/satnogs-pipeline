@@ -2,7 +2,7 @@
 
 Reads the radio telemetry of real CubeSats from volunteer ground stations, decodes it, stores it, and raises an alert when a battery misbehaves. Four satellites so far: [UWE-4](https://en.wikipedia.org/wiki/UWE-4) (University of Würzburg), CatSat, SNUGLITE and Sharjahsat-1. The alert knows whether the satellite is in sunlight or in the Earth's shadow, because a battery is supposed to discharge in the shadow.
 
-![Battery A current of UWE-4 (the one satellite whose current sign is checked) by lighting: 0 of 60 beacons in the Earth's shadow are charging, 61 of 77 in sunlight are](docs/img/battery-current.svg)
+![Battery A current of UWE-4 (the satellite with the longest checked history) by lighting: 0 of 60 beacons in the Earth's shadow are charging, 61 of 77 in sunlight are](docs/img/battery-current.svg)
 
 The data comes from [SatNOGS](https://satnogs.org/), a worldwide network of volunteer ground stations. The lighting is worked out with the SGP4 orbit model from [orbitscreen](https://github.com/supremeinferno/orbitscreen) and the Sun's position, not read from the battery, which is what makes the picture above a check and not a circle.
 
@@ -32,7 +32,7 @@ Measured on real data from 14 to 22 October 2026, unless it says otherwise. The 
 
 | | |
 |---|---|
-| Satellites | 4 satellites, 5 batteries, 366 distinct beacons stored: UWE-4 (2 batteries, voltage, current, temperature, charge), SNUGLITE, CatSat and Sharjahsat-1 (voltage only). |
+| Satellites | 4 satellites, 5 batteries, 366 distinct beacons stored: UWE-4 (2 batteries, voltage, current, temperature, charge), CatSat and Sharjahsat-1 (voltage and current), SNUGLITE (voltage only). |
 | Lighting model against the batteries | In the shadow, **0 of 60** beacons were charging. In sunlight, 61 of 77 were. |
 | Battery rules on the same history | Replayed at each of the 137 UWE-4 readings, "discharging in sunlight" and "low voltage" never fired. The "below its own baseline" rule gave 14 false alarms in 138 readings with a short baseline and none with the one it has now, but it was only active for about two days of that history: see [Battery watch](#battery-watch). |
 | Same rule on made-up readings | Three in the shadow at -300 mA (what "current is negative" would flag): no alert. Three in sunlight at -120 mA: alert, delivered to Telegram, resolved when removed. |
@@ -51,6 +51,7 @@ Measured on real data from 14 to 22 October 2026, unless it says otherwise. The 
 - The first version of the "below its own baseline" rule (4% under the median of 8 or more readings) fired 14 times in 138 UWE-4 readings. Its sunlit voltage sits at 4.20 V when charging and near 4.05 V when not, and a short baseline sees one of the two. The rule now needs 40 readings over 3 days.
 - The format definitions I wanted to turn into decoders are AGPL-3.0, which I only checked after planning to use them. The project is AGPL-3.0 now; see [License](#license).
 - Not every format can be generated: Celesta's Go parser does not compile (the generator puts -1 into a uint8). Each satellite has to be tried.
+- Sharjahsat-1's battery current has the opposite sign to UWE-4's and CatSat's: positive means discharging. Its format definition does not say so; only the lighting did.
 - One beacon with the battery discharging in sunlight is not an anomaly: 8 of 77 sunlit beacons do it, for a few tens of mA. The rule asks for three, 30 minutes apart.
 
 ## How it fits together
@@ -94,7 +95,7 @@ go test ./...
 
 ## Status page
 
-`snapshot` writes `status.json` and a single-page site: for each satellite whether it is in sunlight or in the Earth's shadow right now, when it last sent a beacon, its battery voltage (and current, for UWE-4) over the last three days with the shadow shaded and the shadow beacons drawn hollow, and which rules, if any, are firing. A table view is under each chart. The page is light and dark and works on a phone.
+`snapshot` writes `status.json` and a single-page site: for each satellite whether it is in sunlight or in the Earth's shadow right now, when it last sent a beacon, its battery voltage (and current, where its sign is checked) over the last three days with the shadow shaded and the shadow beacons drawn hollow, and which rules, if any, are firing. A table view is under each chart. The page is light and dark and works on a phone.
 
 The workflow `.github/workflows/status-site.yml` builds and publishes it on GitHub Pages every hour. The job has no database: each run downloads the `status.json` the last run published, adds the newest beacons (3 pages per satellite instead of 10) to its readings, and publishes the result, so the history that the baseline rule needs builds up over the days. A satellite that cannot be fetched keeps its old readings and shows why.
 
@@ -228,13 +229,22 @@ In the shadow the battery was never charging. The 8 sunlit readings that dischar
 
 | Rule | Applies to | Fires when |
 |---|---|---|
-| Discharging in sunlight | batteries with a current whose sign is checked (UWE-4 only so far) | the newest 3 sunlit readings are all below -50 mA and span at least 30 minutes (so the beacons of one pass count once). Replayed at each of the 137 readings, it never fires. |
+| Discharging in sunlight | batteries with a current whose sign is checked (UWE-4, CatSat, Sharjahsat-1) | the newest 3 sunlit readings are all below -50 mA and span at least 30 minutes (so the beacons of one pass count once). Replayed at each of the 137 readings, it never fires. |
 | Below its own baseline | every battery | in sunlight, the median of the newest 3 readings is lower than the median of the earlier sunlit readings by more than 2% and more than 8 times their median absolute deviation. The baseline needs at least 40 readings over 3 days, so a new satellite is not judged until it has that history. |
 | Low voltage | UWE-4 (3500 mV; the lowest seen was 3732) | the newest reading is below the limit |
 | Telemetry stale | every satellite | no beacon stored for longer than that satellite's limit, at least twice the largest gap seen (UWE-4: 12 hours, largest gap 7.7; Sharjahsat-1: 96 hours, largest gap 45.2, because few of its packets carry a battery; the others 24 hours on under three days of history) |
 | Orbit data stale | every satellite | the TLE is more than 10 days old; the rules that need the lighting are then switched off |
 
 How far each rule has been checked, plainly: "discharging in sunlight" has been checked against real data and against made-up readings. "Below its own baseline" is the weakest. No real anomaly has been seen, so it has never fired for a true reason; on real data it stayed quiet, but UWE-4's battery A was the only one with enough history to activate it, and only for about two days. Its first, simpler version gave 14 false alarms, which is how the long baseline came about. Treat it as a rule that has not yet been shown to work. The other satellites' voltage units are the definitions' (CatSat in millivolts, Sharjahsat-1 as 0.008993 V per unit); SNUGLITE's unit is assumed to be millivolts from the size of the numbers (about 8.3 V for two cells), which the baseline rule does not depend on. Sharjahsat-1's beacons with a battery are rare (17 of its frames in 9 days).
+
+**CatSat and Sharjahsat-1's current**, checked the same way on 23 October 2026 (the stored frames decoded again, lighting from SGP4; "charging" is above 20 mA):
+
+| Satellite | Beacons, days | Shadow: charging | Shadow: discharging | Sunlight: charging | Sunlight: discharging |
+|---|---|---|---|---|---|
+| CatSat (`p60_batt_c`) | 37, 1.0 | **0** | 20 | 7 | 10 |
+| Sharjahsat-1 (`ibat`, sign flipped) | 18, 8.0 | **0** | 9 | 8 | 1 |
+
+Sharjahsat-1's raw current is positive when it discharges: all 9 shadow beacons read about +320 mA, and its voltage is higher when the value is negative. So the pipeline negates it. CatSat's sunlit discharges are large (one pass went from +130 to -1,190 mA in five minutes while the voltage fell), most likely a load during the pass; none of them span 30 minutes, and replayed at each reading the rule never fires on either satellite. Both histories are short, CatSat's especially: check again as data grows. Readings stored before this change have no current; new ones do.
 
 **Tested with made-up readings** in the database: three readings in the shadow at -300 mA (what a plain "current is negative" rule would flag) raised nothing; three readings in sunlight at -120 mA raised `BatteryDischargingInSunlight` for both batteries, delivered to Telegram, and the alert resolved when the readings were removed.
 

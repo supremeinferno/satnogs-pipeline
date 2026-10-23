@@ -65,9 +65,12 @@ var satellites = []satellite{
 	{NORAD: uwe4NORAD, Name: "UWE-4", Decode: decodeUWE4Readings, LowMV: 3500, StaleAfter: 12 * time.Hour},
 	{
 		NORAD: 60246, Name: "CatSat", StaleAfter: 24 * time.Hour,
-		// Gomspace P60 power system: millivolts. A four-cell pack.
+		// Gomspace P60 power system: millivolts and milliamps. A four-cell pack.
+		// The current's sign was checked against the lighting (23 Oct 2026, 37
+		// beacons over 1 day): in the shadow 20 of 20 negative, so positive is
+		// charging.
 		Decode: kaitaiDecoder(func(s *kaitai.Stream) (any, error) { var v catsat.Catsat; return &v, v.Read(s, nil, &v) },
-			batterySpec{Voltage: "P60BattV", VoltageScale: 1, MinMV: 8000, MaxMV: 20000}),
+			batterySpec{Voltage: "P60BattV", VoltageScale: 1, MinMV: 8000, MaxMV: 20000, Current: "P60BattC", CurrentScale: 1}),
 	},
 	{
 		NORAD: 43784, Name: "SNUGLITE", StaleAfter: 24 * time.Hour,
@@ -79,8 +82,12 @@ var satellites = []satellite{
 	{
 		NORAD: 55104, Name: "Sharjahsat-1", StaleAfter: 96 * time.Hour,
 		// "x*0.008993 [V]" in the definition: about 7.9 V, a two-cell pack.
+		// Current "x*14.662757 [mA]", but positive is discharging: in the
+		// shadow 9 of 9 beacons were positive, in sunlight 8 of 9 negative, with
+		// the voltage higher when it is negative (23 Oct 2026, 18 beacons over 8
+		// days). So the scale is negated.
 		Decode: kaitaiDecoder(func(s *kaitai.Stream) (any, error) { var v sharjahsat1.Sharjahsat1; return &v, v.Read(s, nil, &v) },
-			batterySpec{Voltage: "Vbat", VoltageScale: 8.993, MinMV: 4000, MaxMV: 12000}),
+			batterySpec{Voltage: "Vbat", VoltageScale: 8.993, MinMV: 4000, MaxMV: 12000, Current: "Ibat", CurrentScale: -14.662757}),
 	},
 }
 

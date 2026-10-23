@@ -46,10 +46,13 @@ func TestSatelliteDecodersOnRealFrames(t *testing.T) {
 		name  string
 		norad int
 		want  []int // voltages that must be among the decoded ones, in mV
+		// currents that must be among the decoded ones, in mA, positive
+		// charging; nil for a satellite whose current is not used
+		wantMA []int
 	}{
-		{"catsat", 60246, []int{16303, 15524}},
-		{"snuglite", 43784, []int{8315, 8277}},
-		{"sharjahsat1", 55104, []int{7905}}, // raw 879 x 8.993 mV
+		{"catsat", 60246, []int{16303, 15524}, []int{170, -340}},
+		{"snuglite", 43784, []int{8315, 8277}, nil},
+		{"sharjahsat1", 55104, []int{7905}, []int{103}}, // raw 879 x 8.993 mV; raw -7 x -14.66 mA, in sunlight
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -57,7 +60,7 @@ func TestSatelliteDecodersOnRealFrames(t *testing.T) {
 			if !ok {
 				t.Fatalf("satellite %d is not in the registry", tt.norad)
 			}
-			var volts []int
+			var volts, amps []int
 			skipped := 0
 			for _, f := range framesOf(t, tt.name) {
 				d, err := sat.Decode(f)
@@ -67,6 +70,9 @@ func TestSatelliteDecodersOnRealFrames(t *testing.T) {
 						t.Fatalf("batteries %+v", d.Batteries)
 					}
 					volts = append(volts, d.Batteries[0].VoltageMV)
+					if c := d.Batteries[0].CurrentMA; c != nil {
+						amps = append(amps, *c)
+					}
 				case errors.Is(err, ErrNotBeacon):
 					skipped++
 				default:
@@ -80,6 +86,14 @@ func TestSatelliteDecodersOnRealFrames(t *testing.T) {
 				if !slices.Contains(volts, w) {
 					t.Errorf("voltages %v do not include %d", volts, w)
 				}
+			}
+			for _, w := range tt.wantMA {
+				if !slices.Contains(amps, w) {
+					t.Errorf("currents %v do not include %d", amps, w)
+				}
+			}
+			if tt.wantMA == nil && len(amps) > 0 {
+				t.Errorf("currents %v from a satellite whose sign is not checked", amps)
 			}
 			t.Logf("%d frames decoded, %d are other packet types", len(volts), skipped)
 		})
