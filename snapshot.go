@@ -34,7 +34,7 @@ const (
 	firstPages      = 10                  // pages (25 frames each) read when there is no earlier snapshot
 	nextPages       = 3                   // ...and when there is one: only what is new
 	trackBefore     = 15 * time.Minute    // the globe's tracks start this long before the snapshot
-	trackAfter      = 6 * time.Hour       // ...and end this long after: GitHub runs the "hourly" job every 1 to 3 hours
+	trackAfter      = 12 * time.Hour      // ...and end this long after: GitHub runs the "hourly" job every 1 to 5 hours
 	trackStep       = 30 * time.Second
 	meanEarthKm     = 6371.0 // the globe's Earth: a sphere of the mean radius
 )

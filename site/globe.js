@@ -1,7 +1,7 @@
 // The globe at the top: the Earth lit by the Sun, the shadow the alerts use (a
 // cylinder behind the Earth), and the satellites where status.json says they
 // are. Positions and lighting come from snapshot's SGP4 run (the "track"
-// fields), every 30 seconds for six hours; this only interpolates and draws.
+// fields), every 30 seconds for twelve hours; this only interpolates and draws.
 // Everything is Earth-fixed and one unit is one Earth radius, as in
 // orbitscreen's globe. If WebGL or the CDN is missing, the page works without it.
 // It runs after app.js, which loads status.json, and uses its ago() and
@@ -267,7 +267,7 @@ function start() {
     const dt = Math.min(now - lastFrame, 100) / 1000; lastFrame = now;
     if (!visible || document.hidden) return;
     const [lo, hi] = bounds();
-    if (playing) { offsetMin += dt * 2; if (offsetMin >= hi) { offsetMin = hi; setPlaying(false); } } // 2 minutes a second
+    if (playing) { offsetMin += dt * 6; if (offsetMin >= hi) { offsetMin = hi; setPlaying(false); } } // 6 minutes a second: 12 hours in 2 minutes
     offsetMin = Math.min(Math.max(offsetMin, lo), Math.max(hi, lo));
     scrub.min = String(lo); scrub.max = String(Math.max(hi, lo)); scrub.value = String(Math.round(offsetMin));
     when.textContent = fmtOffset(offsetMin);
