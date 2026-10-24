@@ -99,10 +99,12 @@ h1 { font-size: clamp(2.3rem, 6vw, 4rem); line-height: 1.02; margin: 16px 0 14px
 
 /* summary tiles */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0 26px; }
-.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; backdrop-filter: blur(8px); }
-.tile .n { font-size: 1.9rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile { position: relative; background: radial-gradient(240px 120px at 0% 0%, var(--accent-soft), transparent 70%), var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; backdrop-filter: blur(8px); }
+.tile .n { font-size: 1.9rem; font-weight: 750; line-height: 1.1; font-variant-numeric: tabular-nums; background: linear-gradient(100deg, var(--text), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tile > .icon { position: absolute; top: 14px; right: 14px; color: var(--accent); opacity: .75; }
 .tile .l { color: var(--muted); font-size: 13px; margin-top: 2px; }
-.tile.good .n { color: var(--ok); } .tile.bad .n { color: var(--warn); }
+.tile.good .n { background-image: linear-gradient(100deg, var(--ok), var(--accent)); } .tile.bad .n { background-image: linear-gradient(100deg, var(--warn), #ff5d73); }
+.tile.good > .icon { color: var(--ok); } .tile.bad > .icon { color: var(--warn); }
 
 /* cards */
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }

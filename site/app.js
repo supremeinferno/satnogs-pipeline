@@ -9,6 +9,8 @@ const RULE_TEXT = {
 };
 const RULE_ORDER = ["discharging_in_sunlight", "voltage_below_baseline", "low_voltage"];
 const ICONS = {
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  radio: '<circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
@@ -225,10 +227,12 @@ function renderTiles(snap) {
   const batteries = sats.reduce((n, s) => n + (s.batteries || []).length, 0);
   const beacons = sats.reduce((n, s) => n + Math.max(0, ...(s.batteries || []).map((b) => b.readings.length)), 0);
   const alerts = sats.reduce((n, s) => n + (s.batteries || []).filter((b) => Object.values(b.anomalies || {}).some(Boolean)).length + (s.stale ? 1 : 0), 0);
-  const tile = (n, l, cls) => `<div class="tile ${cls || ""}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  const tile = (ic, n, l, cls) => `<div class="tile ${cls || ""}">${icon(ic)}<div class="n">${n}</div><div class="l">${l}</div></div>`;
+  const lit = sats.filter((x) => x.sunlit_now).length;
   document.getElementById("tiles").innerHTML =
-    tile(sats.length, "satellites followed") + tile(batteries, "batteries watched") + tile(beacons.toLocaleString("en-GB"), "radio messages in two weeks") +
-    (alerts ? tile(alerts, alerts === 1 ? "thing needs a look" : "things need a look", "bad") : tile("0", "alerts: all quiet", "good"));
+    tile("sun", `${lit} of ${sats.length}`, "satellites in sunlight at the last update") + tile("bolt", batteries, "batteries watched") +
+    tile("radio", beacons.toLocaleString("en-GB"), "radio messages heard in two weeks") +
+    (alerts ? tile("alert", alerts, alerts === 1 ? "thing needs a look" : "things need a look", "bad") : tile("check", "All quiet", "no warnings right now", "good"));
 }
 
 let snapshot = null;
