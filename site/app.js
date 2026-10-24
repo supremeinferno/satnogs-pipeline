@@ -18,6 +18,7 @@ const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>',
   minus: '<path d="M6 12h12"/>',
 };
 const icon = (n) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -44,6 +45,8 @@ function ago(ms) {
   return Math.round(h / 24) + " days ago";
 }
 const volts = (mv) => (mv / 1000).toFixed(2);
+// "77 min ago", "5 h ago", "3 d ago": for the compact rows
+const agoShort = (ms) => { const m = Math.round(ms / 60000); return m < 2 ? "just now" : m < 120 ? m + " min ago" : m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago"; };
 const utc = (t, o) => new Date(t).toLocaleString("en-GB", Object.assign({ timeZone: "UTC" }, o));
 const batteryTitle = (n) => (n === "main" ? "Battery" : "Battery " + n.toUpperCase());
 function flow(ma) {
@@ -68,12 +71,9 @@ function niceTicks(lo, hi, n) {
   for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
   return { ticks: out, step };
 }
-function chartWidth() {
-  const w = Math.min(window.innerWidth, 1120);
-  const cols = window.innerWidth > 900 ? 2 : 1;
-  const card = cols === 2 ? (w - 40 - 16) / 2 : w - 28;
-  return Math.max(260, Math.floor(card - 42));
-}
+// Charts are drawn to the width of the panel they open in, measured then.
+let panelWidth = 600;
+function chartWidth() { return Math.max(240, Math.floor(panelWidth)); }
 
 // The last 24 hours of one satellite: sunlit or shadow, and when beacons arrived.
 function timeline(sat, t1) {
@@ -179,7 +179,7 @@ function renderBattery(b, sat, t0, t1) {
   box.append(el("div", { class: "bhead" },
     `<h3>${esc(batteryTitle(b.battery))}</h3><div class="big">${volts(last.mv)}<span>volts</span></div>` +
     (f ? `<span class="flow ${f.cls}">${icon(f.icon)}${f.text}</span>` : "")));
-  box.append(el("p", { class: `story ${st.cls}` }, `At its last radio message, ${ago(Date.now() - Date.parse(last.t))}: ${st.text.charAt(0).toLowerCase() + st.text.slice(1)}.`));
+  box.append(el("p", { class: `bstory ${st.cls}` }, `At its last radio message, ${ago(Date.now() - Date.parse(last.t))}: ${st.text.charAt(0).toLowerCase() + st.text.slice(1)}.`));
   box.append(el("div", { class: "gauge", role: "img", "aria-label": `${level}% of the way from its lowest (${volts(lo)} V) to its highest (${volts(hi)} V) seen` },
     `<div class="cell"><i style="width:${100 - Math.max(4, level)}%"></i></div><div class="tip"></div>` +
     `<div class="gauge-scale"><span>lowest ${volts(lo)} V</span><span>${level}% of usual range</span><span>highest ${volts(hi)} V</span></div>`));
@@ -198,30 +198,57 @@ function renderBattery(b, sat, t0, t1) {
   return box;
 }
 
+// One satellite: a compact row (name, light, voltage, last message, status)
+// that opens a panel with the plain-words verdict, the 24-hour timeline and
+// each battery's charts. The panel is built when first opened.
+const open = new Set(); // norad ids of the open rows, kept across re-renders
 function renderSatellite(sat, snapMs) {
-  const card = el("article", { class: "card", id: "sat-" + sat.norad });
+  const item = el("article", { class: "sat", id: "sat-" + sat.norad });
   const anyAlert = (sat.batteries || []).some((b) => Object.values(b.anomalies || {}).some(Boolean));
-  const pill = anyAlert ? ["warn", "alert", "Alert"] : sat.stale ? ["warn", "clock", "No recent beacons"] : ["ok", "check", "All quiet"];
-  card.append(el("canvas", { class: "sat3d", "data-norad": sat.norad, width: 240, height: 240, "aria-hidden": "true" }));
-  card.append(el("header", { class: "card-head" }, `<div><h2>${esc(sat.name)}</h2><span class="norad">NORAD ${sat.norad}</span><br><button type="button" class="show-on-globe" data-norad="${sat.norad}">Show on the globe</button></div><span class="pill ${pill[0]}">${icon(pill[1])}${pill[2]}</span>`));
+  const pill = anyAlert ? ["warn", "alert", "Needs a look"] : sat.stale ? ["warn", "clock", "Quiet lately"] : ["ok", "check", "All quiet"];
   const sunny = sat.sunlit_now;
-  const verdict = anyAlert ? "Something needs a look: see the alert below." : sat.stale ? "No radio message for a while, so how it is doing is not known." : "Its batteries look normal.";
-  const where = sunny == null ? "" : sunny ? " At the last update it was in sunlight." : " At the last update it was in the Earth's shadow.";
-  card.append(el("p", { class: "verdict" }, verdict + where));
-  const last = sat.last_beacon ? `Last radio message ${ago(Date.now() - Date.parse(sat.last_beacon))}` : "No radio message yet";
-  card.append(el("div", { class: "light" },
-    `<div class="orb ${sunny ? "sun" : "moon"}">${icon(sunny ? "sun" : "moon")}</div>` +
-    `<div><strong>${sunny == null ? "Lighting unknown" : sunny ? "In sunlight at the last update" : "In the Earth's shadow at the last update"}</strong><small>${last}</small></div>`));
-  const tl = el("div", { class: "timeline" }); tl.append(timeline(sat, snapMs)); card.append(tl);
-  card.append(el("p", { class: "key" }, '<span><i style="background:var(--sun)"></i>sunlight</span><span><i style="background:var(--night)"></i>Earth\'s shadow</span><span><i style="background:var(--accent)"></i>a radio message heard</span>'));
-  if (sat.stale && sat.last_beacon) card.append(el("p", { class: "note" }, `Nothing heard for longer than ${sat.stale_after_hours} hours, the longest silence this satellite normally has.`));
-  if (sat.error) card.append(el("p", { class: "note" }, "Note: " + esc(sat.error)));
   const bats = (sat.batteries || []).filter((b) => b.readings && b.readings.length);
-  if (!bats.length) { card.append(el("p", { class: "quiet" }, "No battery readings yet.")); return card; }
-  const first = Math.min(...bats.map((b) => Date.parse(b.readings[0].t)));
-  const t0 = Math.max(first - 3 * 3600000, snapMs - 3 * 86400000);
-  for (const b of bats) card.append(renderBattery(b, sat, t0, snapMs));
-  return card;
+  const main = bats[0], last = main && main.readings[main.readings.length - 1];
+  let level = null;
+  if (main) { const vs = main.readings.map((r) => r.mv), lo = Math.min(...vs), hi = Math.max(...vs); level = hi - lo < 10 ? 50 : Math.round(100 * (last.mv - lo) / (hi - lo)); }
+  const id = "panel-" + sat.norad;
+  const row = el("button", { type: "button", class: "sat-row", "aria-expanded": String(open.has(sat.norad)), "aria-controls": id },
+    `<canvas class="sat3d" data-norad="${sat.norad}" width="240" height="240" aria-hidden="true"></canvas>` +
+    `<span class="sat-name"><b>${esc(sat.name)}</b><small>NORAD ${sat.norad}</small></span>` +
+    `<span class="sat-light ${sunny ? "sun" : "moon"}">${icon(sunny ? "sun" : "moon")}${sunny == null ? "unknown" : sunny ? "sunlight" : "shadow"}</span>` +
+    (last ? `<span class="sat-volt"><b>${volts(last.mv)} V</b><i class="mini"><i style="width:${Math.max(6, level)}%"></i></i></span>` : `<span class="sat-volt muted">no reading</span>`) +
+    `<span class="sat-seen">${sat.last_beacon ? agoShort(Date.now() - Date.parse(sat.last_beacon)) : "never heard"}</span>` +
+    `<span class="pill ${pill[0]}">${icon(pill[1])}${pill[2]}</span>` +
+    `<span class="chev" aria-hidden="true">${icon("chev")}</span>`);
+  const panel = el("div", { class: "sat-panel", id, role: "region", "aria-label": sat.name });
+  panel.hidden = !open.has(sat.norad);
+  const build = () => {
+    if (panel.dataset.built) return;
+    panel.dataset.built = "1";
+    panelWidth = Math.min(item.clientWidth, 1080) - 40;
+    const verdict = anyAlert ? "Something needs a look: see the warning below." : sat.stale ? "No radio message for a while, so how it is doing is not known." : "Its batteries look normal.";
+    const where = sunny == null ? "" : sunny ? " At the last update it was in sunlight." : " At the last update it was in the Earth's shadow.";
+    panel.append(el("div", { class: "panel-top" }, `<p class="verdict">${verdict + where}</p><button type="button" class="show-on-globe" data-norad="${sat.norad}">Show on the globe</button>`));
+    const tl = el("div", { class: "timeline" }); tl.append(timeline(sat, snapMs)); panel.append(tl);
+    panel.append(el("p", { class: "key" }, '<span><i style="background:var(--sun)"></i>sunlight</span><span><i style="background:var(--night)"></i>Earth\'s shadow</span><span><i style="background:var(--accent)"></i>a radio message heard</span>'));
+    if (sat.stale && sat.last_beacon) panel.append(el("p", { class: "note" }, `Nothing heard for longer than ${sat.stale_after_hours} hours, the longest silence this satellite normally has.`));
+    if (sat.error) panel.append(el("p", { class: "note" }, "Note: " + esc(sat.error)));
+    if (!bats.length) { panel.append(el("p", { class: "quiet" }, "No battery readings yet.")); return; }
+    const grid = el("div", { class: "batts" });
+    if (bats.length > 1 && panelWidth > 760) panelWidth = (panelWidth - 24) / 2;
+    const first = Math.min(...bats.map((b) => Date.parse(b.readings[0].t)));
+    const t0 = Math.max(first - 3 * 3600000, snapMs - 3 * 86400000);
+    for (const b of bats) grid.append(renderBattery(b, sat, t0, snapMs));
+    panel.append(grid);
+  };
+  row.addEventListener("click", () => {
+    const now = panel.hidden;
+    if (now) { open.add(sat.norad); panel.hidden = false; build(); } else { open.delete(sat.norad); panel.hidden = true; }
+    row.setAttribute("aria-expanded", String(now));
+  });
+  item.append(row, panel);
+  if (!panel.hidden) requestAnimationFrame(build);
+  return item;
 }
 
 function renderTiles(snap) {
@@ -244,6 +271,7 @@ function render() {
   document.getElementById("updated").textContent = `Updated ${utc(snapMs, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} UTC, ${ago(Date.now() - snapMs)}. It refreshes every hour.`;
   renderTiles(snapshot);
   document.getElementById("cards").replaceChildren(...snapshot.satellites.map((s) => renderSatellite(s, snapMs)));
+  document.getElementById("sat-count").textContent = snapshot.satellites.length;
 }
 async function main() {
   try {
@@ -260,6 +288,18 @@ async function main() {
     box.style.display = "block"; box.textContent = "Could not load the data: " + e.message;
   }
 }
+// The navigation bar: glass once the page scrolls, and the section on screen highlighted.
+(() => {
+  const nav = document.getElementById("topnav"); if (!nav) return;
+  const onScroll = () => nav.classList.toggle("scrolled", scrollY > 30);
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+  const links = new Map([...nav.querySelectorAll(".nav-links a")].map((a) => [a.getAttribute("href").slice(1), a]));
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) if (e.isIntersecting) for (const [id, a] of links) a.classList.toggle("on", id === e.target.id);
+  }, { rootMargin: "-45% 0px -50% 0px" });
+  for (const id of links.keys()) { const sec = document.getElementById(id); if (sec) io.observe(sec); }
+})();
+
 let resizeTimer;
 window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });
 main();

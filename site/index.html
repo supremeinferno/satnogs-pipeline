@@ -14,15 +14,21 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<nav class="topnav" id="topnav" aria-label="Sections">
+  <a class="nav-brand" href="#space"><span class="pulse" aria-hidden="true"></span>satnogs-pipeline</a>
+  <div class="nav-links"><a href="#space">Globe</a><a href="#story">What is a CubeSat</a><a href="#satellites">Satellites</a><a href="#how">How it works</a><a href="#showcase">The whole sky</a></div>
+  <a class="nav-cta" href="https://supremeinferno.github.io/orbitscreen/">Live tracker <span aria-hidden="true">↗</span></a>
+</nav>
 <header class="space" id="space">
   <canvas id="globe" hidden aria-label="3D globe: the Earth lit by the Sun, its shadow, and the satellites followed here at their positions now"></canvas>
   <div class="shade"></div>
   <div class="labels" id="labels"></div>
   <div class="space-inner wrap">
-    <div class="brand"><span class="pulse" aria-hidden="true"></span>satnogs-pipeline · live status</div>
+    <p class="eyebrow">Live battery status</p>
     <h1>Satellite batteries</h1>
     <p class="lede">Small satellites, about the size of a shoebox, circle the Earth every 90 minutes. Volunteers with radio antennas hear their messages, and this page shows whether their batteries are healthy. In sunlight a battery should charge; in the Earth's shadow it drains, and that is normal.</p>
     <p class="updated" id="updated">Loading…</p>
+    <div class="hero-cta"><a class="btn-primary" href="#satellites">See the satellites</a><a class="btn-ghost" href="#story">What is a CubeSat?</a></div>
     <ul class="scene-key" id="scene-key" hidden>
       <li><i style="background:#ffc457"></i>in sunlight</li>
       <li><i style="background:#8c9bff"></i>in the Earth's shadow</li>
@@ -51,12 +57,16 @@
   </div>
 </section>
 <div class="wrap">
-  <div id="error" role="alert"></div>
-  <section class="tiles" id="tiles" aria-label="Summary"></section>
-  <section class="cards" id="cards" aria-label="Satellites"><div class="skeleton"></div><div class="skeleton"></div></section>
+  <section class="sats" id="satellites" aria-labelledby="sats-h">
+    <div class="section-head"><p class="eyebrow">Live status</p><h2 id="sats-h"><span id="sat-count">Five</span> satellites and their batteries</h2>
+      <p>One row per satellite. Click a row for its last day of sunlight and shadow and its battery charts.</p></div>
+    <div id="error" role="alert"></div>
+    <div class="tiles" id="tiles" aria-label="Summary"></div>
+    <div class="sat-list" id="cards" aria-label="Satellites"><div class="skeleton"></div><div class="skeleton"></div></div>
+  </section>
 
-  <section class="how" aria-labelledby="how-h">
-    <h2 id="how-h">How it works</h2>
+  <section class="how" id="how" aria-labelledby="how-h">
+    <div class="section-head"><p class="eyebrow">Behind the page</p><h2 id="how-h">How it works</h2><p>From a radio message in space to a row on this page, in four steps.</p></div>
     <div class="steps">
       <div class="step"><div class="num">1</div><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l6-6"/><path d="M14 4a6 6 0 0 1 6 6"/><path d="M14 8a2 2 0 0 1 2 2"/><circle cx="11" cy="13" r="3"/></svg><b>Listen</b><p>Volunteers around the world point small antennas at the sky and record the short radio messages each satellite sends. They share them through SatNOGS.</p></div>
       <div class="step"><div class="num">2</div><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4"/><path d="M7 12h4"/></svg><b>Read the numbers</b><p>Each message is a few dozen bytes. This project turns them into the battery's voltage, and its current where the satellite sends it.</p></div>
@@ -83,14 +93,14 @@
     <p class="showcase-note">Above: every active satellite in CelesTrak's catalog, 60 times faster than real time, from the tracker's own published data. Colours: cyan low orbits, violet middle, amber geostationary; the five followed here are the bright ones. A sketch from the orbit elements: the tracker itself computes exact positions with SGP4. In the tracker, click any of the five to see its battery too.</p>
   </div>
 </section>
-<div class="wrap">
-  <footer>
-    <p><strong>What this is not.</strong> A learning project, not an operations tool. It refreshes every hour, not live. The rules were checked against a few days of real data and have not yet been shown to catch a real fault. Some voltage units are taken from the satellite's published format or assumed from the size of the numbers.</p>
-    <p>Code and the full story: <a href="https://github.com/supremeinferno/satnogs-pipeline">satnogs-pipeline</a>, with the orbit model of <a href="https://github.com/supremeinferno/orbitscreen">orbitscreen</a>, whose <a href="https://supremeinferno.github.io/orbitscreen/">live tracker</a> shows these satellites too. Beacons from <a href="https://satnogs.org/">SatNOGS</a> and its volunteer ground stations, orbit data from SatNOGS DB and <a href="https://celestrak.org/">CelesTrak</a>. SatNOGS data are <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>; the readings on this page and in <a href="status.json">status.json</a> are decoded from them and shared under the same licence.</p>
-  </footer>
-</div>
+<footer class="site-foot">
+  <div class="wrap foot-grid">
+    <div><b>satnogs-pipeline</b><p>A learning project, not an operations tool. It refreshes about every hour, not live. The rules were checked against a few days of real data and have not yet been shown to catch a real fault. Some voltage units are taken from each satellite's published format, others assumed from the size of the numbers.</p></div>
+    <div><b>Project</b><a href="https://github.com/supremeinferno/satnogs-pipeline">Code and write-up</a><a href="https://supremeinferno.github.io/orbitscreen/">orbitscreen live tracker</a><a href="https://github.com/supremeinferno/orbitscreen">orbitscreen code</a><a href="status.json">status.json</a></div>
+    <div><b>Data</b><span><a href="https://satnogs.org/">SatNOGS</a> and its volunteer ground stations</span><span><a href="https://celestrak.org/">CelesTrak</a> and SatNOGS DB orbit data</span><span>Earth images: <a href="https://earthobservatory.nasa.gov/">NASA Earth Observatory</a> (Blue Marble, Black Marble)</span><p>SatNOGS data are <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>; the readings on this page and in status.json are decoded from them and shared under the same licence.</p></div>
+  </div>
+</footer>
 <script src="app.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",

@@ -193,6 +193,11 @@ func TestSnapshotJSONAndPage(t *testing.T) {
 			t.Errorf("index.html does not load %s", f)
 		}
 	}
+	for _, f := range []string{"earth.js", "img/earth-day.jpg", "img/earth-night.jpg"} {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(f))); err != nil {
+			t.Errorf("%s was not written: %v", f, err)
+		}
+	}
 	if !strings.Contains(string(globe), `from "three"`) {
 		t.Error("globe.js is not the three.js globe")
 	}

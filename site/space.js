@@ -4,6 +4,7 @@
 // card's own canvas, so the page never holds more than this and the globe's
 // WebGL contexts. Without WebGL, or with reduced motion, the page is as before.
 import * as THREE from "three";
+import { earthMaterial } from "./earth.js";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const dark = matchMedia("(prefers-color-scheme: dark)");
@@ -156,7 +157,9 @@ function story() {
   sunGlow.position.copy(SUN_AT); scene.add(sunGlow);
   // the Earth, a dark sphere with a thin blue rim, that slides in front of the Sun
   const earth = new THREE.Group();
-  earth.add(new THREE.Mesh(new THREE.SphereGeometry(6, 64, 48), new THREE.MeshBasicMaterial({ color: 0x03070f })));
+  const storySun = new THREE.Vector3(-1, 0, 0);
+  const earthBall = new THREE.Mesh(new THREE.SphereGeometry(6, 96, 64), earthMaterial(storySun, { nightGlow: 2.2 }));
+  earthBall.rotation.y = 2.2; earth.add(earthBall); // Europe and Africa towards the viewer
   earth.add(new THREE.Mesh(new THREE.SphereGeometry(6.12, 64, 48), new THREE.ShaderMaterial({
     side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
     vertexShader: "varying vec3 n; void main() { n = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
@@ -201,6 +204,8 @@ function story() {
     sunGlow.scale.setScalar(3 + 9 * sunUp); sunGlow.material.opacity = sunUp * (1 - eclipse);
     // the Earth slides in from the right until it covers the Sun
     earth.position.set(SUN_AT.x + 2.2 + 16 * (1 - eclipse), SUN_AT.y + 1.6, SUN_AT.z - 1);
+    // the Sun is behind the Earth here, so we see its night side and a thin lit edge; in the sphere's own frame
+    storySun.set(-0.35, 0.25, -1).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), -earthBall.rotation.y);
     // chapter 4: radio waves from the antenna
     const talk = smooth(0.74, 0.82, p);
     antenna.getWorldPosition(tmp);
@@ -259,12 +264,13 @@ function showcase() {
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(36, 1, 0.1, 400);
     const sky = new THREE.Group(); sky.rotation.x = 0.42; scene.add(sky);
     // a dark Earth with a graticule and a thin atmosphere
-    sky.add(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), new THREE.MeshBasicMaterial({ color: 0x07101f })));
+    const skySun = new THREE.Vector3(1, 0, 0);
+    sky.add(new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), earthMaterial(skySun)));
     const grid = [];
     for (let lat = -60; lat <= 60; lat += 30) for (let k = 0; k < 96; k++) { const p = lat * D, l1 = k / 96 * 2 * Math.PI, l2 = (k + 1) / 96 * 2 * Math.PI; grid.push(Math.cos(p) * Math.cos(l1), Math.sin(p), Math.cos(p) * Math.sin(l1), Math.cos(p) * Math.cos(l2), Math.sin(p), Math.cos(p) * Math.sin(l2)); }
     for (let lon = 0; lon < 180; lon += 30) for (let k = 0; k < 96; k++) { const l = lon * D, p1 = k / 96 * 2 * Math.PI, p2 = (k + 1) / 96 * 2 * Math.PI; grid.push(Math.cos(p1) * Math.cos(l), Math.sin(p1), Math.cos(p1) * Math.sin(l), Math.cos(p2) * Math.cos(l), Math.sin(p2), Math.cos(p2) * Math.sin(l)); }
     const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(grid.map((v) => v * 1.002), 3));
-    sky.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x2a4a72, transparent: true, opacity: 0.55 })));
+    sky.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x6fa8dc, transparent: true, opacity: 0.12 })));
     sky.add(new THREE.Mesh(new THREE.SphereGeometry(1.06, 64, 32), new THREE.ShaderMaterial({
       side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
       vertexShader: "varying vec3 n; void main() { n = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
@@ -301,6 +307,11 @@ function showcase() {
       const t = t0 + (now - p0) * (reduced ? 0 : 60); // 60 times real time
       const gmst = (280.46061837 + 360.98564736629 * (t / 86400000 + 2440587.5 - 2451545)) * D;
       const cg = Math.cos(gmst), sg = Math.sin(gmst);
+      // the Sun's direction (low-precision series, as in internal/orbit), turned into the same Earth-fixed frame
+      const dn = t / 86400000 + 2440587.5 - 2451545, g = (357.528 + 0.9856003 * dn) * D;
+      const lam = (280.46 + 0.9856474 * dn + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * D, eps = (23.439 - 4e-7 * dn) * D;
+      const SX = Math.cos(lam), SY = Math.cos(eps) * Math.sin(lam), SZ = Math.sin(eps) * Math.sin(lam);
+      skySun.set(cg * SX + sg * SY, SZ, -(-sg * SX + cg * SY));
       for (const { list, pos, g } of clouds) {
         list.forEach((x, k) => {
           let M = x.M0 + x.ns * (t - x.ep) / 1000, E = M;
@@ -325,7 +336,7 @@ function reveal() {
   const io = new IntersectionObserver((es) => {
     for (const e of es) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); setTimeout(() => e.target.classList.remove("reveal", "in"), 900); }
   }, { rootMargin: "0px 0px -8% 0px" });
-  const watch = () => { for (const el of document.querySelectorAll(".tile, .card, .step, .how h2, footer")) if (!el.dataset.revealed) { el.dataset.revealed = "1"; el.classList.add("reveal"); io.observe(el); } };
+  const watch = () => { for (const el of document.querySelectorAll(".tile, .sat, .step, .section-head, .site-foot")) if (!el.dataset.revealed) { el.dataset.revealed = "1"; el.classList.add("reveal"); io.observe(el); } };
   watch(); new MutationObserver(watch).observe(document.getElementById("cards"), { childList: true });
 }
 
@@ -333,11 +344,11 @@ function reveal() {
 function tilt() {
   if (!matchMedia("(pointer: fine)").matches) return;
   document.addEventListener("pointermove", (e) => {
-    const card = e.target.closest?.(".card, .step, .tile");
+    const card = e.target.closest?.(".step, .tile");
     for (const c of document.querySelectorAll(".tilted")) if (c !== card) { c.classList.remove("tilted"); c.style.transform = ""; }
     if (!card) return;
     const r = card.getBoundingClientRect(), dx = (e.clientX - r.left) / r.width - .5, dy = (e.clientY - r.top) / r.height - .5;
-    const k = card.classList.contains("card") ? 2 : 5;
+    const k = 5;
     card.classList.add("tilted");
     card.style.transform = `perspective(900px) rotateX(${(-dy * k).toFixed(2)}deg) rotateY(${(dx * k).toFixed(2)}deg)`;
   });

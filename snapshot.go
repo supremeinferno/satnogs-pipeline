@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/supremeinferno/orbitscreen/pkg/sgp4"
@@ -368,7 +369,11 @@ func writeSnapshot(dir string, s *snapshot) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(filepath.Join(dir, filepath.Base(path)), b, 0o644)
+		out := filepath.Join(dir, filepath.FromSlash(strings.TrimPrefix(path, "site/")))
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(out, b, 0o644)
 	})
 }
 

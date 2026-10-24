@@ -8,6 +8,7 @@
 // batteryTitle().
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { earthMaterial } from "./earth.js";
 
 const SUN = 0xffc457, SHADE = 0x8c9bff, ALERT = 0xff5d73, R = 6371;
 const PATH_MIN = 50; // minutes of track drawn either side of a satellite
@@ -57,19 +58,10 @@ function start() {
   canvas.style.touchAction = "pan-y";
   if (matchMedia("(pointer: coarse)").matches) $("scene-hint").textContent = "Two fingers to turn · tap a satellite";
 
-  // Earth: an equirectangular canvas (ocean, graticule, land) lit by the Sun.
-  const tex = document.createElement("canvas"); tex.width = 2048; tex.height = 1024;
-  const texture = new THREE.CanvasTexture(tex); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 4;
-  paintEarth(tex, null);
-  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), new THREE.MeshPhongMaterial({ map: texture, shininess: 9, specular: 0x1c3048 }));
+  // Earth: NASA's day and night images, split by the real Sun (earth.js).
+  const earthSun = new THREE.Vector3(1, 0, 0);
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), earthMaterial(earthSun));
   system.add(earth);
-  world.add(new THREE.AmbientLight(0x9fb4d0, 0.16));
-  const sunLight = new THREE.DirectionalLight(0xfff1d6, 3.4);
-  system.add(sunLight);
-  fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json").then((r) => r.json()).then((w) => {
-    if (!window.topojson) return;
-    paintEarth(tex, topojson.feature(w, w.objects.land)); texture.needsUpdate = true;
-  }).catch(() => {});
 
   // Atmosphere: a slightly larger sphere, seen from inside, glowing edge-on.
   system.add(new THREE.Mesh(new THREE.SphereGeometry(1.07, 64, 32), new THREE.ShaderMaterial({
@@ -201,7 +193,11 @@ function start() {
     pop.innerHTML = popHTML = html;
     pop.querySelector(".follow").onclick = () => { follow = !follow; fly = null; popHTML = ""; fillPop(); };
     pop.querySelector(".x").onclick = () => select(null);
-    pop.querySelector(".go").onclick = () => $("sat-" + s.norad)?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    pop.querySelector(".go").onclick = () => {
+      const item = $("sat-" + s.norad); if (!item) return;
+      const row = item.querySelector(".sat-row"); if (row && row.getAttribute("aria-expanded") !== "true") row.click();
+      item.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    };
   }
   document.addEventListener("click", (e) => {
     const b = e.target.closest(".show-on-globe"); if (!b) return;
@@ -285,7 +281,7 @@ function start() {
 
     const sp = sample(snap.sun, t);
     toVec(sp.lat, sp.lon, 0, sunDir).normalize();
-    sunLight.position.copy(sunDir).multiplyScalar(10);
+    earthSun.copy(sunDir);
     sunGlow.position.copy(sunDir).multiplyScalar(70); sunCore.position.copy(sunGlow.position);
     shadow.quaternion.setFromUnitVectors(yAxis, tmp.copy(sunDir).negate());
     system.updateMatrixWorld();
@@ -377,35 +373,6 @@ function spark(s) {
   const dots = rs.map((r) => `<circle cx="${X(r).toFixed(1)}" cy="${Y(r).toFixed(1)}" r="2" fill="${r.sunlit === false ? "#8c9bff" : "#ffc457"}"/>`).join("");
   return `<p class="spark-cap">${esc(batteryTitle(b.battery))}, last 3 days: ${(lo / 1000).toFixed(2)} to ${(hi / 1000).toFixed(2)} V</p>
     <svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(s.name)} voltage over three days"><path d="${line}" fill="none" stroke="#4cc9f0" stroke-width="1.4" opacity=".7"/>${dots}</svg>`;
-}
-
-// Ocean, graticule and land, equirectangular. Coastlines that cross ±180°
-// (eastern Russia, Fiji, Antarctica) are unwrapped and drawn three times,
-// shifted by ±360°, as orbitscreen's map does.
-function paintEarth(c, land) {
-  const g = c.getContext("2d"), W = c.width, H = c.height;
-  const P = (lat, lon) => [(lon + 180) / 360 * W, (90 - lat) / 180 * H];
-  const ocean = g.createLinearGradient(0, 0, 0, H);
-  ocean.addColorStop(0, "#123a5c"); ocean.addColorStop(0.5, "#16486f"); ocean.addColorStop(1, "#123a5c");
-  g.fillStyle = ocean; g.fillRect(0, 0, W, H);
-  g.strokeStyle = "rgba(160, 200, 255, .07)"; g.lineWidth = 1.5; g.beginPath();
-  for (let lon = -180; lon <= 180; lon += 30) { const [x] = P(0, lon); g.moveTo(x, 0); g.lineTo(x, H); }
-  for (let lat = -60; lat <= 60; lat += 30) { const [, y] = P(lat, 0); g.moveTo(0, y); g.lineTo(W, y); }
-  g.stroke();
-  if (!land) return;
-  g.fillStyle = "#3f7a8f"; g.strokeStyle = "#7fb8d4"; g.lineWidth = 1.4; g.beginPath();
-  for (const f of land.features) {
-    const polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
-    for (const poly of polys) for (const ring of poly) {
-      let prev = null;
-      const un = ring.map(([lon, lat]) => { if (prev !== null) lon += 360 * Math.round((prev - lon) / 360); prev = lon; return [lon, lat]; });
-      for (const shift of [-360, 0, 360]) {
-        un.forEach(([lon, lat], k) => { const [x, y] = P(lat, lon + shift); k ? g.lineTo(x, y) : g.moveTo(x, y); });
-        g.closePath();
-      }
-    }
-  }
-  g.fill(); g.stroke();
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]); }
