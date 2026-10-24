@@ -188,7 +188,7 @@ func TestSnapshotJSONAndPage(t *testing.T) {
 	if !strings.Contains(string(page), "<title>Satellite batteries</title>") || !strings.Contains(string(app), `fetch("status.json"`) {
 		t.Fatal("the page does not read status.json")
 	}
-	for _, f := range []string{"style.css", "app.js", "globe.js"} {
+	for _, f := range []string{"style.css", "app.js", "globe.js", "space.js"} {
 		if !strings.Contains(string(page), `"`+f+`"`) {
 			t.Errorf("index.html does not load %s", f)
 		}

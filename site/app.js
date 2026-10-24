@@ -56,6 +56,7 @@ function story(r) {
   if (r.ma != null && r.ma > 20) return { cls: "good", text: r.sunlit === false ? "Charging" : "Charging from the Sun" };
   if (r.ma != null && r.ma < -20) return r.sunlit === false
     ? { cls: "calm", text: "Running on battery in the Earth's shadow, which is normal" }
+    : r.ma > -50 ? { cls: "calm", text: "Using a little more power than its solar panels give, which happens now and then" }
     : { cls: "warn", text: "Using more power than its solar panels give" };
   if (r.ma != null) return { cls: "calm", text: "Resting: almost no current in or out" };
   return r.sunlit == null ? { cls: "calm", text: "Lighting not known" } : r.sunlit ? { cls: "good", text: "In sunlight" } : { cls: "calm", text: "In the Earth's shadow" };
@@ -201,6 +202,7 @@ function renderSatellite(sat, snapMs) {
   const card = el("article", { class: "card", id: "sat-" + sat.norad });
   const anyAlert = (sat.batteries || []).some((b) => Object.values(b.anomalies || {}).some(Boolean));
   const pill = anyAlert ? ["warn", "alert", "Alert"] : sat.stale ? ["warn", "clock", "No recent beacons"] : ["ok", "check", "All quiet"];
+  card.append(el("canvas", { class: "sat3d", "data-norad": sat.norad, width: 240, height: 240, "aria-hidden": "true" }));
   card.append(el("header", { class: "card-head" }, `<div><h2>${esc(sat.name)}</h2><span class="norad">NORAD ${sat.norad}</span><br><button type="button" class="show-on-globe" data-norad="${sat.norad}">Show on the globe</button></div><span class="pill ${pill[0]}">${icon(pill[1])}${pill[2]}</span>`));
   const sunny = sat.sunlit_now;
   const verdict = anyAlert ? "Something needs a look: see the alert below." : sat.stale ? "No radio message for a while, so how it is doing is not known." : "Its batteries look normal.";
