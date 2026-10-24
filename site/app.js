@@ -49,6 +49,16 @@ function flow(ma) {
   if (Math.abs(ma) < 20) return { cls: "", icon: "minus", text: `idle, ${ma} mA` };
   return ma > 0 ? { cls: "charging", icon: "up", text: `charging, +${ma} mA` } : { cls: "discharging", icon: "down", text: `discharging, ${ma} mA` };
 }
+// What a battery is doing, in plain words, from its newest reading.
+function story(r) {
+  if (r.ma != null && r.ma > 20) return { cls: "good", text: r.sunlit === false ? "Charging" : "Charging from the Sun" };
+  if (r.ma != null && r.ma < -20) return r.sunlit === false
+    ? { cls: "calm", text: "Running on battery in the Earth's shadow, which is normal" }
+    : { cls: "warn", text: "Using more power than its solar panels give" };
+  if (r.ma != null) return { cls: "calm", text: "Resting: almost no current in or out" };
+  return r.sunlit == null ? { cls: "calm", text: "Lighting not known" } : r.sunlit ? { cls: "good", text: "In sunlight" } : { cls: "calm", text: "In the Earth's shadow" };
+}
+let gradientId = 0;
 function niceTicks(lo, hi, n) {
   const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
   const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag, out = [];
@@ -76,7 +86,7 @@ function timeline(sat, t1) {
   const times = new Set();
   for (const b of sat.batteries || []) for (const r of b.readings) { const t = Date.parse(r.t); if (t >= t0 && t <= t1) times.add(Math.round(t / 60000)); }
   for (const m of times) svg.append(sv("rect", { x: x(m * 60000) - 1, y: 8, width: 2.5, height: H - 16, rx: 1, fill: "var(--accent)" }));
-  for (const [i, lab] of ["24 h ago", "12 h ago", "snapshot"].entries()) {
+  for (const [i, lab] of ["24 h ago", "12 h ago", "last update"].entries()) {
     const xx = [0, W / 2, W][i];
     svg.append(sv("text", { x: xx, y: H + 14, "text-anchor": i === 0 ? "start" : i === 2 ? "end" : "middle" }, lab));
   }
@@ -112,15 +122,31 @@ function chart(readings, key, sat, t0, t1, label) {
     svg.append(sv("text", { x: x(d), y: H - 6, "text-anchor": "middle" }, utc(d, { day: "numeric", month: "short" })));
     svg.append(sv("line", { class: "grid", x1: x(d), x2: x(d), y1: T, y2: H - B }));
   }
-  // beacons from one pass are joined by a faint line
-  let run = [];
-  const flush = () => { if (run.length > 1) svg.append(sv("polyline", { class: "path", points: run.map((r) => `${x(Date.parse(r.t)).toFixed(1)},${y(r[key]).toFixed(1)}`).join(" ") })); run = []; };
-  pts.forEach((r, i) => { if (i && Date.parse(r.t) - Date.parse(pts[i - 1].t) > 40 * 60000) flush(); run.push(r); });
-  flush();
+  // a line through the beacons with a soft gradient below it (for current:
+  // green above zero, amber below); hours without beacons are drawn dashed
+  const id = "g" + ++gradientId, base = key === "ma" ? y(0) : H - B;
+  const defs = sv("defs", {});
+  const grad = sv("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+  const stops = key === "ma"
+    ? [[0, "var(--ok)", .35], [(y(0) - T) / (H - T - B), "var(--ok)", .04], [(y(0) - T) / (H - T - B), "var(--warn)", .04], [1, "var(--warn)", .35]]
+    : [[0, "var(--accent)", .32], [1, "var(--accent)", 0]];
+  for (const [o, c, a] of stops) grad.append(sv("stop", { offset: o, "stop-color": c, "stop-opacity": a }));
+  defs.append(grad); svg.append(defs);
+  const P = pts.map((r) => [x(Date.parse(r.t)), y(r[key])]);
+  if (P.length > 1) {
+    const d = P.map(([a, b], i) => `${i ? "L" : "M"}${a.toFixed(1)} ${b.toFixed(1)}`).join("");
+    svg.append(sv("path", { d: `${d}L${P[P.length - 1][0].toFixed(1)} ${base}L${P[0][0].toFixed(1)} ${base}Z`, fill: `url(#${id})` }));
+    let solid = "", dashed = "";
+    for (let i = 1; i < P.length; i++) {
+      const seg = `M${P[i - 1][0].toFixed(1)} ${P[i - 1][1].toFixed(1)}L${P[i][0].toFixed(1)} ${P[i][1].toFixed(1)}`;
+      if (Date.parse(pts[i].t) - Date.parse(pts[i - 1].t) > 40 * 60000) dashed += seg; else solid += seg;
+    }
+    svg.append(sv("path", { class: "trend gap", d: dashed }), sv("path", { class: "trend", d: solid }));
+  }
   pts.forEach((r, i) => {
     const last = i === pts.length - 1;
     if (last) svg.append(sv("circle", { class: "halo", cx: x(Date.parse(r.t)), cy: y(r[key]), r: 11 }));
-    const c = sv("circle", { class: "dot" + (r.sunlit === false ? " shade" : "") + (last ? " last" : ""), cx: x(Date.parse(r.t)), cy: y(r[key]), r: last ? 5 : 3.5 });
+    const c = sv("circle", { class: "dot" + (r.sunlit === false ? " shade" : "") + (last ? " last" : ""), cx: x(Date.parse(r.t)), cy: y(r[key]), r: last ? 5 : 2.6 });
     const state = r.sunlit == null ? "" : r.sunlit ? ", in sunlight" : ", in the Earth's shadow";
     c.append(sv("title", {}, `${utc(r.t, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} UTC${state}: ${key === "mv" ? volts(r.mv) + " V" : r.ma + " mA"}`));
     svg.append(c);
@@ -135,16 +161,23 @@ function chart(readings, key, sat, t0, t1, label) {
 function renderBattery(b, sat, t0, t1) {
   const rs = b.readings, last = rs[rs.length - 1];
   const box = el("div", { class: "batt" });
-  const f = flow(last.ma);
+  const f = flow(last.ma), st = story(last);
+  // the gauge: where the newest voltage sits between the lowest and highest this battery has shown
+  const lo = Math.min(...rs.map((r) => r.mv)), hi = Math.max(...rs.map((r) => r.mv));
+  const level = hi - lo < 10 ? 50 : Math.round(100 * (last.mv - lo) / (hi - lo));
   box.append(el("div", { class: "bhead" },
-    `<h3>${esc(batteryTitle(b.battery))}</h3><div class="big">${volts(last.mv)}<span>V</span></div>` +
+    `<h3>${esc(batteryTitle(b.battery))}</h3><div class="big">${volts(last.mv)}<span>volts</span></div>` +
     (f ? `<span class="flow ${f.cls}">${icon(f.icon)}${f.text}</span>` : "")));
-  box.append(el("p", { class: "sub" }, `Latest beacon ${ago(Date.now() - Date.parse(last.t))}. ${rs.length} beacons in the last ${Math.max(1, Math.round((t1 - Date.parse(rs[0].t)) / 86400000))} days.`));
+  box.append(el("p", { class: `story ${st.cls}` }, `At its last radio message, ${ago(Date.now() - Date.parse(last.t))}: ${st.text.charAt(0).toLowerCase() + st.text.slice(1)}.`));
+  box.append(el("div", { class: "gauge", role: "img", "aria-label": `${level}% of the way from its lowest (${volts(lo)} V) to its highest (${volts(hi)} V) seen` },
+    `<div class="cell"><i style="width:${100 - Math.max(4, level)}%"></i></div><div class="tip"></div>` +
+    `<div class="gauge-scale"><span>lowest ${volts(lo)} V</span><span>${level}% of usual range</span><span>highest ${volts(hi)} V</span></div>`));
+  box.append(el("p", { class: "sub" }, `Last radio message ${ago(Date.now() - Date.parse(last.t))}. ${rs.length} messages in ${Math.max(1, Math.round((t1 - Date.parse(rs[0].t)) / 86400000))} days.`));
   const vc = chart(rs, "mv", sat, t0, t1, `${sat.name} ${batteryTitle(b.battery)} voltage, last three days`);
-  if (vc) { const bx = el("div", { class: "chartbox" }, '<p class="cap">Voltage (volts)</p>'); bx.append(vc); box.append(bx); }
+  if (vc) { const bx = el("div", { class: "chartbox" }, '<p class="cap">Voltage over three days <span>(dots: radio messages; darker bands: the Earth\'s shadow)</span></p>'); bx.append(vc); box.append(bx); }
   if (rs.some((r) => r.ma != null)) {
     const cc = chart(rs, "ma", sat, t0, t1, `${sat.name} ${batteryTitle(b.battery)} current, last three days`);
-    if (cc) { const bx = el("div", { class: "chartbox" }, '<p class="cap">Current (milliamps, above zero is charging)</p>'); bx.append(cc); box.append(bx); }
+    if (cc) { const bx = el("div", { class: "chartbox" }, '<p class="cap">Current <span>(above the line: charging; below: using the battery)</span></p>'); bx.append(cc); box.append(bx); }
   }
   const fired = RULE_ORDER.filter((r) => b.anomalies && b.anomalies[r]);
   if (fired.length) box.append(el("ul", { class: "rules" }, fired.map((r) => `<li>${icon("alert")}<span>${RULE_TEXT[r]}</span></li>`).join("")));
@@ -160,12 +193,15 @@ function renderSatellite(sat, snapMs) {
   const pill = anyAlert ? ["warn", "alert", "Alert"] : sat.stale ? ["warn", "clock", "No recent beacons"] : ["ok", "check", "All quiet"];
   card.append(el("header", { class: "card-head" }, `<div><h2>${esc(sat.name)}</h2><span class="norad">NORAD ${sat.norad}</span><br><button type="button" class="show-on-globe" data-norad="${sat.norad}">Show on the globe</button></div><span class="pill ${pill[0]}">${icon(pill[1])}${pill[2]}</span>`));
   const sunny = sat.sunlit_now;
-  const last = sat.last_beacon ? `Last beacon ${ago(Date.now() - Date.parse(sat.last_beacon))}` : "No beacon yet";
+  const verdict = anyAlert ? "Something needs a look: see the alert below." : sat.stale ? "No radio message for a while, so how it is doing is not known." : "Its batteries look normal.";
+  const where = sunny == null ? "" : sunny ? " At the last update it was in sunlight." : " At the last update it was in the Earth's shadow.";
+  card.append(el("p", { class: "verdict" }, verdict + where));
+  const last = sat.last_beacon ? `Last radio message ${ago(Date.now() - Date.parse(sat.last_beacon))}` : "No radio message yet";
   card.append(el("div", { class: "light" },
     `<div class="orb ${sunny ? "sun" : "moon"}">${icon(sunny ? "sun" : "moon")}</div>` +
-    `<div><strong>${sunny == null ? "Lighting unknown" : sunny ? "In sunlight at the snapshot" : "In the Earth's shadow at the snapshot"}</strong><small>${last}</small></div>`));
+    `<div><strong>${sunny == null ? "Lighting unknown" : sunny ? "In sunlight at the last update" : "In the Earth's shadow at the last update"}</strong><small>${last}</small></div>`));
   const tl = el("div", { class: "timeline" }); tl.append(timeline(sat, snapMs)); card.append(tl);
-  card.append(el("p", { class: "key" }, '<span><i style="background:var(--sun)"></i>sunlight</span><span><i style="background:var(--night)"></i>Earth\'s shadow</span><span><i style="background:var(--accent)"></i>a beacon heard</span>'));
+  card.append(el("p", { class: "key" }, '<span><i style="background:var(--sun)"></i>sunlight</span><span><i style="background:var(--night)"></i>Earth\'s shadow</span><span><i style="background:var(--accent)"></i>a radio message heard</span>'));
   if (sat.stale && sat.last_beacon) card.append(el("p", { class: "note" }, `Nothing heard for longer than ${sat.stale_after_hours} hours, the longest silence this satellite normally has.`));
   if (sat.error) card.append(el("p", { class: "note" }, "Note: " + esc(sat.error)));
   const bats = (sat.batteries || []).filter((b) => b.readings && b.readings.length);

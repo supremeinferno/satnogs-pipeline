@@ -1,7 +1,7 @@
 // The globe at the top: the Earth lit by the Sun, the shadow the alerts use (a
 // cylinder behind the Earth), and the satellites where status.json says they
 // are. Positions and lighting come from snapshot's SGP4 run (the "track"
-// fields), every 30 seconds for three hours; this only interpolates and draws.
+// fields), every 30 seconds for six hours; this only interpolates and draws.
 // Everything is Earth-fixed and one unit is one Earth radius, as in
 // orbitscreen's globe. If WebGL or the CDN is missing, the page works without it.
 // It runs after app.js, which loads status.json, and uses its ago() and
@@ -156,12 +156,12 @@ function start() {
   };
 
   // Selecting a satellite: the camera turns to it and a card says how it is.
-  let selected = null, fly = null, lastPop = 0;
+  let selected = null, fly = null, lastPop = 0, follow = false, simT = Date.now(), popHTML = "";
   const pop = $("sat-pop");
   function select(o) {
     if (selected) selected.label.classList.remove("on");
     selected = o;
-    if (!o) { pop.hidden = true; return; }
+    if (!o) { pop.hidden = true; follow = false; return; }
     o.label.classList.add("on");
     controls.autoRotate = false;
     const len = camera.position.length(), to = o.world.clone().normalize();
@@ -174,16 +174,32 @@ function start() {
     const o = selected; if (!o) return;
     const s = o.s, p = o.now || { lit: false, alt: 0, lat: 0, lon: 0 };
     const c = o.alert ? ALERT : p.lit ? SUN : SHADE;
+    // when the lighting next changes, from the track
+    const f = Math.max(0, Math.ceil((simT - t0) / step));
+    let change = "";
+    for (let i = f; i < s.track.length; i++) {
+      if ((s.track[i][3] === 1) !== p.lit) {
+        const m = Math.max(1, Math.round((t0 + i * step - simT) / 60000));
+        change = `${p.lit ? "enters the shadow" : "back in sunlight"} in ${m < 60 ? m + " min" : Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") + " min"}`;
+        break;
+      }
+    }
+    if (simT > tEnd) change = "not known: this data has run out";
+    else if (!change) change = p.lit ? "in sunlight until the data ends" : "in the shadow until the data ends";
     const rows = (s.batteries || []).filter((b) => b.readings.length).map((b) => {
       const r = b.readings[b.readings.length - 1];
       return `<dt>${esc(batteryTitle(b.battery))}</dt><dd>${(r.mv / 1000).toFixed(2)} V${r.ma != null ? `, ${r.ma > 0 ? "+" : ""}${r.ma} mA` : ""}</dd>`;
     }).join("");
-    pop.innerHTML = `<button type="button" class="ghost x" aria-label="Close">×</button>
+    const html = `<button type="button" class="ghost x" aria-label="Close">×</button>
       <h3><span style="color:${hex(c)}">●</span> ${esc(s.name)}</h3><p class="sub">NORAD ${s.norad} · ${Math.round(p.alt)} km up · ${Math.abs(p.lat).toFixed(0)}° ${p.lat >= 0 ? "N" : "S"}, ${Math.abs(p.lon).toFixed(0)}° ${p.lon >= 0 ? "E" : "W"}</p>
-      <dl><dt>Light</dt><dd>${p.lit ? "in sunlight" : "in the Earth's shadow"}</dd>${rows}
+      <dl><dt>Light</dt><dd>${p.lit ? "in sunlight" : "in the Earth's shadow"}</dd><dt>Next</dt><dd>${change}</dd>${rows}
       <dt>Last beacon</dt><dd>${s.last_beacon ? ago(Date.now() - Date.parse(s.last_beacon)) : "none yet"}</dd>
       <dt>Status</dt><dd>${o.alert ? (s.stale ? "no recent beacons" : "an alert is firing") : "all quiet"}</dd></dl>
-      <button type="button" class="ghost go">Batteries and charts ↓</button>`;
+      ${spark(s)}
+      <div class="pop-actions"><button type="button" class="ghost follow" aria-pressed="${follow}">${follow ? "Following" : "Follow"}</button><button type="button" class="ghost go">Batteries and charts ↓</button></div>`;
+    if (html === popHTML) return; // unchanged: keep the buttons under the pointer
+    pop.innerHTML = popHTML = html;
+    pop.querySelector(".follow").onclick = () => { follow = !follow; fly = null; popHTML = ""; fillPop(); };
     pop.querySelector(".x").onclick = () => select(null);
     pop.querySelector(".go").onclick = () => $("sat-" + s.norad)?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
   }
@@ -204,7 +220,10 @@ function start() {
     return h && h.object.userData.o;
   };
   let down = null;
-  canvas.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY]; controls.autoRotate = false; $("scene-hint").hidden = true; });
+  canvas.addEventListener("pointerdown", (e) => {
+    down = [e.clientX, e.clientY]; controls.autoRotate = false; $("scene-hint").hidden = true;
+    if (follow) { follow = false; popHTML = ""; fillPop(); } // a drag takes the camera back
+  });
   canvas.addEventListener("pointerup", (e) => {
     if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 6) select(hitAt(e) || null);
     down = null;
@@ -254,6 +273,7 @@ function start() {
     when.textContent = fmtOffset(offsetMin);
     $("now").hidden = Math.round(offsetMin) === 0;
     const t = Date.now() + offsetMin * 60000;
+    simT = t;
     const note = $("scene-note");
     note.hidden = t <= tEnd;
     if (!note.hidden) note.textContent = "These positions are from the last update, which is late: the globe stops where its data ends.";
@@ -303,6 +323,11 @@ function start() {
       camera.position.copy(fly.from).lerp(fly.to, e).normalize();
       camera.lookAt(0, 0, 0);
       if (k === 1) fly = null;
+    } else if (follow && selected) {
+      // keep the selected satellite in view as it moves
+      const to = tmp.copy(selected.world).normalize(); to.y = to.y * 0.8 + 0.12;
+      camera.position.normalize().lerp(to.normalize(), 0.05);
+      camera.lookAt(0, 0, 0);
     } else controls.update();
     camera.position.setLength(baseDist * intro * (1 + 0.5 * p));
     camera.lookAt(0, 0, 0);
@@ -338,6 +363,20 @@ function start() {
   canvas.hidden = false;
   for (const id of ["scene-key", "scene-hint", "scene-bar"]) $(id).hidden = false;
   requestAnimationFrame(frame);
+}
+
+// The first battery's voltage over the last three days, as a small SVG: a line,
+// and each beacon as a dot coloured by its lighting.
+function spark(s) {
+  const b = (s.batteries || []).find((x) => x.readings.length > 1); if (!b) return "";
+  const t1 = Date.now(), t0 = t1 - 3 * 86400000;
+  const rs = b.readings.filter((r) => Date.parse(r.t) >= t0); if (rs.length < 2) return "";
+  const lo = Math.min(...rs.map((r) => r.mv)), hi = Math.max(...rs.map((r) => r.mv)), span = Math.max(hi - lo, 20);
+  const W = 254, H = 44, X = (r) => (Date.parse(r.t) - t0) / (t1 - t0) * (W - 6) + 3, Y = (r) => H - 4 - (r.mv - lo) / span * (H - 8);
+  const line = rs.map((r, i) => `${i ? "L" : "M"}${X(r).toFixed(1)} ${Y(r).toFixed(1)}`).join("");
+  const dots = rs.map((r) => `<circle cx="${X(r).toFixed(1)}" cy="${Y(r).toFixed(1)}" r="2" fill="${r.sunlit === false ? "#8c9bff" : "#ffc457"}"/>`).join("");
+  return `<p class="spark-cap">${esc(batteryTitle(b.battery))}, last 3 days: ${(lo / 1000).toFixed(2)} to ${(hi / 1000).toFixed(2)} V</p>
+    <svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(s.name)} voltage over three days"><path d="${line}" fill="none" stroke="#4cc9f0" stroke-width="1.4" opacity=".7"/>${dots}</svg>`;
 }
 
 // Ocean, graticule and land, equirectangular. Coastlines that cross ±180°

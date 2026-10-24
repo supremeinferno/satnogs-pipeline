@@ -88,7 +88,11 @@ h1 { font-size: clamp(2.3rem, 6vw, 4rem); line-height: 1.02; margin: 16px 0 14px
 .sat-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; margin: 0 0 12px; }
 .sat-pop dt { color: #8b9cb1; } .sat-pop dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .sat-pop .x { position: absolute; top: 10px; right: 10px; padding: 2px 8px; }
-.sat-pop .go { width: 100%; padding: 7px 10px; }
+.pop-actions { display: flex; gap: 8px; }
+.sat-pop .go { flex: 1; padding: 7px 10px; }
+.sat-pop .follow[aria-pressed="true"] { border-color: #4cc9f0; color: #4cc9f0; }
+.spark-cap { margin: 0 0 4px; color: #8b9cb1; font-size: 12px; }
+.spark { display: block; width: 100%; height: 44px; margin: 0 0 12px; }
 .show-on-globe { border: 1px solid var(--border); background: var(--raised); color: var(--muted); border-radius: 9px; padding: 3px 9px; font: inherit; font-size: 12px; cursor: pointer; margin-top: 6px; }
 .show-on-globe:hover { color: var(--text); border-color: var(--accent); }
 .space:not(.live) ~ .wrap .show-on-globe { display: none; }
@@ -102,7 +106,7 @@ h1 { font-size: clamp(2.3rem, 6vw, 4rem); line-height: 1.02; margin: 16px 0 14px
 
 /* cards */
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px; box-shadow: var(--shadow); backdrop-filter: blur(10px); min-width: 0; }
+.card { background: radial-gradient(520px 220px at 0% 0%, var(--accent-soft), transparent 70%), radial-gradient(420px 220px at 100% 0%, rgba(140, 155, 255, .08), transparent 70%), var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px; box-shadow: var(--shadow); backdrop-filter: blur(10px); min-width: 0; }
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 h2 { font-size: 1.35rem; margin: 0; font-weight: 700; letter-spacing: -.01em; }
 .norad { color: var(--faint); font-size: 12.5px; }
@@ -132,6 +136,23 @@ h3 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 600; letter-s
 .flow.charging { background: var(--ok-soft); color: var(--ok); }
 .flow.discharging { background: var(--warn-soft); color: var(--warn); }
 .sub { color: var(--faint); font-size: 12.5px; margin: 4px 0 0; }
+/* plain words first */
+.verdict { margin: 12px 0 0; font-size: 15px; line-height: 1.45; color: var(--text); }
+.story { margin: 8px 0 0; font-size: 14px; font-weight: 600; }
+.story.good { color: var(--ok); } .story.warn { color: var(--warn); } .story.calm { color: var(--muted); }
+/* the gauge: a battery outline with a gradient fill */
+.gauge { position: relative; margin: 12px 0 4px; padding-right: 8px; }
+.gauge .cell { position: relative; height: 22px; border-radius: 8px; border: 1.5px solid var(--border); overflow: hidden;
+  background: linear-gradient(90deg, #2b7fd8 0%, #4cc9f0 45%, #3ddc97 100%); box-shadow: inset 0 0 0 3px var(--solid); }
+/* the empty part covers the gradient from the right */
+.gauge .cell i { position: absolute; top: 0; right: 0; bottom: 0; background: var(--solid); transition: width .6s ease; }
+.gauge .tip { position: absolute; right: 2px; top: 7px; width: 5px; height: 9px; border-radius: 0 3px 3px 0; background: var(--border); }
+.gauge-scale { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; color: var(--faint); font-size: 11.5px; }
+.gauge-scale span:nth-child(2) { color: var(--muted); font-weight: 600; }
+.gauge-scale span { white-space: nowrap; }
+.chartbox .cap span { color: var(--faint); }
+svg .trend { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; opacity: .85; }
+svg .trend.gap { stroke-dasharray: 3 5; opacity: .45; }
 .chartbox { margin-top: 12px; }
 .chartbox .cap { color: var(--muted); font-size: 12.5px; margin: 0 0 2px; }
 svg.chart { width: 100%; height: auto; overflow: visible; }
