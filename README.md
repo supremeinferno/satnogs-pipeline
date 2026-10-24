@@ -94,6 +94,28 @@ go test ./...
 
 `fetch` flags: `-interval` (0 = once), `-norad` (satellite catalog number, 0 = all; default 25544, the ISS), `-max-pages` (25 observations per page). Connections come from `DATABASE_URL` and `AMQP_URL`, defaulting to the ones in `docker-compose.yml`. The RabbitMQ management UI is at http://localhost:15672 (user and password `satnogs`).
 
+## Satellites
+
+Only small amateur satellites send their battery voltage in public radio messages that anyone can decode; commercial ones do not. Of the 16,793 active satellites, about 40 still in orbit have a public format definition in satnogs-decoders with a battery field. Each one is tried here and kept only if real frames give a believable voltage.
+
+| Satellite | NORAD | Battery field | Unit from | Checked on | Current |
+|---|---|---|---|---|---|
+| UWE-4 | 43880 | bytes 55 and 59 of the beacon (2 batteries; hand-written decoder, [`uwe4.go`](uwe4.go)) | the format definition (mV) | 137 beacons over 5 days, each with a checksum | sign checked against the lighting |
+| CatSat | 60246 | `p60_batt_v` | Gomspace P60 (mV) | 37 beacons over 1 day | sign checked |
+| SNUGLITE | 43784 | `battery_voltage` | assumed mV from the size (8.3 V, two cells) | 214 beacons over 1.4 days | not sent |
+| Sharjahsat-1 | 55104 | `vbat` | the definition (×0.008993 V) | 18 beacons over 8 days | sign checked, and flipped |
+| GRBBeta | 60237 | `bat_volt` | assumed mV from the size (16.7 V, four cells) | 429 distinct beacons over 4 days | not used: it only sends in sunlight |
+
+Not added, and why (24 October 2026):
+
+| Reason | Satellites |
+|---|---|
+| The generated Go parser does not compile (bugs in the Kaitai compiler's Go output, also in its 0.12 development snapshot) | Celesta, ARICA-2, CUBESAT XI-IV, CUBESAT XI-V, CPSAT, ERMINAZ-2, CUTE-1.7, Foresail-1p, GBSAT, GreenCube, SLEDGE |
+| Recent frames do not match the format definition | BUGSAT-1, DELFI-N3XT, FrontierSat, UWE-3, STRAND-1 |
+| Nothing heard for weeks or years | CEVROSAT-1, SALSAT, S-Net A to D, SNUGLITE-III HANA |
+| The frames under its id are another satellite's | UNISAT-6 (they are UNISAT-7's) |
+| Being checked on four days of frames | OPTISAT, AEPEX, COSMO, SPRITE, SPIRONE, SNUGLITE-III DURI, MinXSS 2, ALSAT-1N, REAL |
+
 ## Status page
 
 `snapshot` writes `status.json` and the site in [`site/`](site/): for each satellite whether it is in sunlight or in the Earth's shadow right now, when it last sent a beacon, its battery voltage (and current, where its sign is checked) over the last three days with the shadow shaded and the shadow beacons drawn hollow, and which rules, if any, are firing. A table view is under each chart. The page is light and dark and works on a phone.
