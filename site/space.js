@@ -13,6 +13,7 @@ const byNorad = new Map((snap.satellites || []).map((s) => [s.norad, s]));
 try { starfield(); } catch (e) { console.warn("starfield:", e); }
 try { cubesats(); } catch (e) { console.warn("cubesats:", e); }
 try { story(); } catch (e) { console.warn("story:", e); }
+try { showcase(); } catch (e) { console.warn("showcase:", e); }
 if (!reduced) { tilt(); reveal(); }
 
 // Stars in three layers that drift at different speeds as the page scrolls.
@@ -220,6 +221,103 @@ function story() {
   };
   sec.classList.add("live");
   requestAnimationFrame(frame);
+}
+
+// The closing section: every active satellite in orbitscreen's published
+// catalog, moving 60 times faster than real time around a dark Earth. The
+// file is fetched only when the section comes near. Positions are two-body
+// Kepler orbits from the mean elements, plenty for a picture; orbitscreen
+// itself uses SGP4.
+function showcase() {
+  const sec = document.getElementById("showcase"); if (!sec) return;
+  const canvas = sec.querySelector("canvas");
+  let started = false;
+  new IntersectionObserver(([e], io) => {
+    if (!e.isIntersecting || started) return;
+    started = true; io.disconnect();
+    fetch("https://supremeinferno.github.io/orbitscreen/data/active.csv").then((r) => r.text()).then(run).catch((err) => console.warn("showcase:", err));
+  }, { rootMargin: "100% 0px" }).observe(sec);
+
+  function run(csv) {
+    const lines = csv.trim().split("\n"), head = lines[0].split(","), col = (n) => head.indexOf(n);
+    const iN = col("MEAN_MOTION"), iE = col("ECCENTRICITY"), iI = col("INCLINATION"), iO = col("RA_OF_ASC_NODE"), iW = col("ARG_OF_PERICENTER"), iM = col("MEAN_ANOMALY"), iT = col("EPOCH"), iId = col("NORAD_CAT_ID");
+    const ours = new Set((snap.satellites || []).map((x) => x.norad));
+    const D = Math.PI / 180, MU = 398600.4418, R = 6371;
+    const rows = [];
+    for (let k = 1; k < lines.length; k++) {
+      const f = lines[k].split(","); const n = +f[iN]; if (!(n > 0.05)) continue;
+      const ns = n * 2 * Math.PI / 86400, a = Math.cbrt(MU / (ns * ns)) / R; // semi-major axis, Earth radii
+      const ep = Date.parse(f[iT] + "Z"), e = +f[iE], inc = f[iI] * D, raan = f[iO] * D, argp = f[iW] * D;
+      // the orbit's orientation, so a point in its plane (x, y) becomes x·P + y·Q
+      const cO = Math.cos(raan), sO = Math.sin(raan), ci = Math.cos(inc), si = Math.sin(inc), cw = Math.cos(argp), sw = Math.sin(argp);
+      rows.push({ a, e, ns, ep, M0: f[iM] * D, P: [cO * cw - sO * sw * ci, sO * cw + cO * sw * ci, sw * si], Q: [-cO * sw - sO * cw * ci, -sO * sw + cO * cw * ci, cw * si], n, ours: ours.has(+f[iId]) });
+    }
+    const count = document.getElementById("sky-count"); if (count) count.textContent = rows.length.toLocaleString("en-GB");
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(36, 1, 0.1, 400);
+    const sky = new THREE.Group(); sky.rotation.x = 0.42; scene.add(sky);
+    // a dark Earth with a graticule and a thin atmosphere
+    sky.add(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), new THREE.MeshBasicMaterial({ color: 0x07101f })));
+    const grid = [];
+    for (let lat = -60; lat <= 60; lat += 30) for (let k = 0; k < 96; k++) { const p = lat * D, l1 = k / 96 * 2 * Math.PI, l2 = (k + 1) / 96 * 2 * Math.PI; grid.push(Math.cos(p) * Math.cos(l1), Math.sin(p), Math.cos(p) * Math.sin(l1), Math.cos(p) * Math.cos(l2), Math.sin(p), Math.cos(p) * Math.sin(l2)); }
+    for (let lon = 0; lon < 180; lon += 30) for (let k = 0; k < 96; k++) { const l = lon * D, p1 = k / 96 * 2 * Math.PI, p2 = (k + 1) / 96 * 2 * Math.PI; grid.push(Math.cos(p1) * Math.cos(l), Math.sin(p1), Math.cos(p1) * Math.sin(l), Math.cos(p2) * Math.cos(l), Math.sin(p2), Math.cos(p2) * Math.sin(l)); }
+    const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(grid.map((v) => v * 1.002), 3));
+    sky.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({ color: 0x2a4a72, transparent: true, opacity: 0.55 })));
+    sky.add(new THREE.Mesh(new THREE.SphereGeometry(1.06, 64, 32), new THREE.ShaderMaterial({
+      side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+      vertexShader: "varying vec3 n; void main() { n = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+      fragmentShader: "varying vec3 n; void main() { float i = pow(max(0.0, 0.64 - dot(n, vec3(0.0, 0.0, 1.0))), 3.0); gl_FragColor = vec4(0.3, 0.75, 1.0, 1.0) * i * 0.7; }",
+    })));
+    // every satellite one point, coloured by its kind of orbit; ours larger and bright
+    const all = rows.filter((x) => !x.ours), mine = rows.filter((x) => x.ours);
+    const cloud = (list, size, colorOf) => {
+      const pos = new Float32Array(3 * list.length), colr = new Float32Array(3 * list.length), c = new THREE.Color();
+      list.forEach((x, k) => { c.setHex(colorOf(x)); colr.set([c.r, c.g, c.b], 3 * k); });
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.BufferAttribute(colr, 3));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ size, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
+      pts.frustumCulled = false; sky.add(pts); return { list, pos, g };
+    };
+    const kind = (x) => (x.n > 11.25 ? 0x4cc9f0 : x.n > 1.1 || x.n < 0.9 ? (x.e > 0.25 ? 0xff8fa3 : 0x8c9bff) : 0xffc457);
+    const clouds = [cloud(all, 1.5, kind), cloud(mine, 5, () => 0xfff1c4)]; // pixels; three.js scales them for the screen
+
+    const layout = () => {
+      const W = sec.clientWidth, H = sec.clientHeight;
+      renderer.setSize(W, H, false); camera.aspect = W / H;
+      camera.position.set(0, 0, W >= 900 ? 11 : 15); camera.lookAt(0, 0, 0);
+      // to the right of the text on wide screens; above it on phones, measured from the top
+      if (W >= 900) camera.setViewOffset(W, H, -W * 0.22, 0, W, H); else camera.setViewOffset(W, H, 0, H / 2 - Math.min(W * 0.5, 270), W, H);
+      camera.updateProjectionMatrix();
+    };
+    layout(); new ResizeObserver(layout).observe(sec);
+    let visible = true;
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(sec);
+    const t0 = Date.now(), p0 = performance.now();
+    const frame = (now) => {
+      requestAnimationFrame(frame);
+      if (!visible || document.hidden) return;
+      const t = t0 + (now - p0) * (reduced ? 0 : 60); // 60 times real time
+      const gmst = (280.46061837 + 360.98564736629 * (t / 86400000 + 2440587.5 - 2451545)) * D;
+      const cg = Math.cos(gmst), sg = Math.sin(gmst);
+      for (const { list, pos, g } of clouds) {
+        list.forEach((x, k) => {
+          let M = x.M0 + x.ns * (t - x.ep) / 1000, E = M;
+          for (let j = 0; j < 4; j++) E -= (E - x.e * Math.sin(E) - M) / (1 - x.e * Math.cos(E)); // Kepler's equation
+          const px = x.a * (Math.cos(E) - x.e), py = x.a * Math.sqrt(1 - x.e * x.e) * Math.sin(E);
+          const X = px * x.P[0] + py * x.Q[0], Y = px * x.P[1] + py * x.Q[1], Z = px * x.P[2] + py * x.Q[2];
+          const ex = cg * X + sg * Y, ey = -sg * X + cg * Y; // to the Earth-fixed frame
+          pos[3 * k] = ex; pos[3 * k + 1] = Z; pos[3 * k + 2] = -ey;
+        });
+        g.attributes.position.needsUpdate = true;
+      }
+      sky.rotation.y = (now / 1000) * 0.03;
+      renderer.render(scene, camera);
+    };
+    sec.classList.add("live");
+    requestAnimationFrame(frame);
+  }
 }
 
 // Sections fade up as they scroll into view.
