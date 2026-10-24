@@ -152,7 +152,7 @@ h3 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 600; letter-s
 .gauge-scale span { white-space: nowrap; }
 .chartbox .cap span { color: var(--faint); }
 svg .trend { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; opacity: .85; }
-svg .trend.gap { stroke-dasharray: 3 5; opacity: .45; }
+svg .range { stroke: var(--dot); stroke-width: 2; stroke-linecap: round; opacity: .35; }
 .chartbox { margin-top: 12px; }
 .chartbox .cap { color: var(--muted); font-size: 12.5px; margin: 0 0 2px; }
 svg.chart { width: 100%; height: auto; overflow: visible; }
@@ -180,20 +180,21 @@ th { color: var(--faint); font-weight: 600; font-size: 12px; border-bottom: 1px 
 /* how it works */
 .how { margin: 34px 0 6px; }
 .how h2 { font-size: 1.1rem; margin-bottom: 14px; }
-.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.step { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
-.step .num { width: 26px; height: 26px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.step { position: relative; background: radial-gradient(300px 140px at 0% 0%, var(--accent-soft), transparent 70%), var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.step .num { width: 28px; height: 28px; border-radius: 9px; background: linear-gradient(135deg, #4cc9f0, #8c9bff); color: #04101e; display: grid; place-items: center; font-weight: 800; font-size: 13px; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(76, 201, 240, .3); }
+.step > .icon { position: absolute; top: 18px; right: 16px; width: 22px; height: 22px; color: var(--accent); opacity: .8; }
 .step b { display: block; margin-bottom: 2px; } .step p { margin: 0; color: var(--muted); font-size: 14px; }
 footer { color: var(--faint); font-size: 13px; padding: 28px 0 56px; }
 footer p { margin: 0 0 8px; max-width: 80ch; }
 #error { display: none; border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
 .skeleton { height: 140px; border-radius: 18px; background: var(--raised); border: 1px solid var(--border); }
 
-@media (max-width: 900px) { .cards { grid-template-columns: 1fr; } .tiles { grid-template-columns: repeat(2, 1fr); } .steps { grid-template-columns: 1fr; }
+@media (max-width: 900px) { .cards { grid-template-columns: 1fr; } .tiles { grid-template-columns: repeat(2, 1fr); } .steps { grid-template-columns: repeat(2, 1fr); }
   .space.live { min-height: 0; }
   .space.live .space-inner { padding-top: min(116vw, 560px); padding-bottom: 96px; }
   .space .shade { background: linear-gradient(transparent 0%, transparent min(78vw, 380px), rgba(2, 5, 11, .78) min(112vw, 540px), var(--band-end) 100%); }
   .space-inner > * { max-width: none; }
   .scene-bar { bottom: 20px; left: 50%; }
   .sat-pop { position: fixed; top: auto; bottom: 12px; transform: none; left: 12px; right: 12px; width: auto; z-index: 20; } }
-@media (max-width: 520px) { .wrap { padding: 0 14px; } .card { padding: 16px; border-radius: 16px; } .big { font-size: 2rem; } }
+@media (max-width: 520px) { .steps { grid-template-columns: 1fr; } .wrap { padding: 0 14px; } .card { padding: 16px; border-radius: 16px; } .big { font-size: 2rem; } }

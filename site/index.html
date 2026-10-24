@@ -48,9 +48,10 @@
   <section class="how" aria-labelledby="how-h">
     <h2 id="how-h">How it works</h2>
     <div class="steps">
-      <div class="step"><div class="num">1</div><b>Hear</b><p>Volunteer ground stations record each satellite's radio beacons and share them through SatNOGS.</p></div>
-      <div class="step"><div class="num">2</div><b>Decode</b><p>The raw bytes of every beacon become a battery voltage, and a current where the satellite reports it.</p></div>
-      <div class="step"><div class="num">3</div><b>Compare with the Sun</b><p>An orbit model says whether the satellite was in sunlight or in the Earth's shadow when it sent each beacon, and the rules only judge what the light allows.</p></div>
+      <div class="step"><div class="num">1</div><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l6-6"/><path d="M14 4a6 6 0 0 1 6 6"/><path d="M14 8a2 2 0 0 1 2 2"/><circle cx="11" cy="13" r="3"/></svg><b>Listen</b><p>Volunteers around the world point small antennas at the sky and record the short radio messages each satellite sends. They share them through SatNOGS.</p></div>
+      <div class="step"><div class="num">2</div><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4"/><path d="M7 12h4"/></svg><b>Read the numbers</b><p>Each message is a few dozen bytes. This project turns them into the battery's voltage, and its current where the satellite sends it.</p></div>
+      <div class="step"><div class="num">3</div><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4"/></svg><b>Check against the Sun</b><p>In the Earth's shadow a battery is supposed to drain. So the orbit of each satellite is worked out, and a battery is only judged on what is normal for sunlight or shadow.</p></div>
+      <div class="step"><div class="num">4</div><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg><b>Warn if something is off</b><p>If a battery drains in sunlight, drops below its usual level, or a satellite goes quiet for too long, a warning goes out by Telegram and shows on this page.</p></div>
     </div>
   </section>
   <footer>
