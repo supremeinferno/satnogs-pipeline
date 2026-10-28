@@ -1,10 +1,35 @@
 # satnogs-pipeline
 
-Reads the radio telemetry of real CubeSats from volunteer ground stations, decodes it, stores it, and raises an alert when a battery misbehaves. Five satellites so far: [UWE-4](https://en.wikipedia.org/wiki/UWE-4) (University of Würzburg), CatSat, SNUGLITE, Sharjahsat-1 and GRBBeta. The alert knows whether the satellite is in sunlight or in the Earth's shadow, because a battery is supposed to discharge in the shadow.
+**Are the batteries of small satellites OK?** This project listens to their radio messages and tells you, on a live page anyone can open.
+
+### 👉 [Open the live page](https://supremeinferno.github.io/satnogs-pipeline/)
+
+[![The live status page: a 3D Earth with the satellites followed here, their battery voltages, and the Earth's shadow](docs/img/status-page.jpg)](https://supremeinferno.github.io/satnogs-pipeline/)
+
+## In plain words
+
+- **What it watches.** Five small satellites ([UWE-4](https://en.wikipedia.org/wiki/UWE-4), CatSat, SNUGLITE, Sharjahsat-1 and GRBBeta), each about the size of a shoebox, circling the Earth every 90 minutes.
+- **Where the data comes from.** Every few seconds each one sends a short radio message with its battery's voltage. Volunteers around the world receive them with small antennas and share them through [SatNOGS](https://satnogs.org/).
+- **The one idea behind it.** A battery should charge in sunlight and drain in the Earth's shadow. So the project works out where each satellite is and whether it is in sunlight, and only raises an alarm about a battery that drains when it should be charging.
+- **What you can do on the page.** Turn the 3D Earth and see where each satellite is right now, in sunlight or in shadow; open a satellite's row for its battery charts; scroll through a short story of what a CubeSat is; and see the whole sky of about 16,800 satellites, with how long each one spends in the dark.
+- **What it is not.** A learning project, not a tool for satellite operators. It refreshes about every hour, and its warning rules have been checked on real data but have not yet caught a real fault.
+
+**Why only five?** Most of the ~16,800 active satellites (Starlink, weather, GPS and so on) never make their battery data public. Only about 40 small amateur and university satellites do, in a form anyone can decode, and each one has to be checked by hand; see [Satellites](#satellites).
+
+| Link | What it is |
+|---|---|
+| [Live page](https://supremeinferno.github.io/satnogs-pipeline/) | the satellites, their batteries, the 3D Earth |
+| [status.json](https://supremeinferno.github.io/satnogs-pipeline/status.json) | the same data as a file, for anyone to reuse ([CC BY-SA 4.0](#license)) |
+| [orbitscreen](https://supremeinferno.github.io/orbitscreen/) | the sister project: every satellite in orbit, live, and the close approaches between them |
+| [How it fits together](#how-it-fits-together) · [Run it](#run-it) · [Results](#results) | for developers |
+
+## For developers
+
+The rest of this page is the technical side. The pipeline fetches the satellites' radio frames from SatNOGS, decodes them, stores the battery readings in PostgreSQL, and checks them against the lighting worked out with the SGP4 orbit model from [orbitscreen](https://github.com/supremeinferno/orbitscreen) and the Sun's position. Alerts go to Telegram. It runs on Docker Compose or Kubernetes, and a GitHub Action publishes the live page every hour.
+
+The check that matters most, on real data: in the Earth's shadow, UWE-4's battery was never charging (0 of 60 beacons), which is what makes the lighting model trustworthy.
 
 ![Battery A current of UWE-4 (the satellite with the longest checked history) by lighting: 0 of 60 beacons in the Earth's shadow are charging, 61 of 77 in sunlight are](docs/img/battery-current.svg)
-
-The data comes from [SatNOGS](https://satnogs.org/), a worldwide network of volunteer ground stations. The lighting is worked out with the SGP4 orbit model from [orbitscreen](https://github.com/supremeinferno/orbitscreen) and the Sun's position, not read from the battery, which is what makes the picture above a check and not a circle.
 
 ## What it does
 
