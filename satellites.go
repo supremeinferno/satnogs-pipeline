@@ -126,6 +126,7 @@ func decodeUWE4Readings(frame []byte) (Decoded, error) {
 
 // batterySpec names the fields of a generated parser that hold the battery.
 type batterySpec struct {
+	Battery      string  // its name in the readings: "main" if empty
 	Voltage      string  // field name, searched for anywhere in the parsed frame
 	VoltageScale float64 // millivolts per unit of the field
 	MinMV, MaxMV int     // plausible range, in place of a checksum
@@ -133,10 +134,12 @@ type batterySpec struct {
 	CurrentScale float64
 }
 
-// kaitaiDecoder builds a Decode function from a generated parser and a spec.
+// kaitaiDecoder builds a Decode function from a generated parser and one spec
+// per battery. A frame without the first battery's voltage is another kind of
+// packet; one whose voltages are out of range is damaged.
 // Whatever the parser does with an odd frame (an error or a panic), the result
 // is ErrNotBeacon, never a crash.
-func kaitaiDecoder(parse func(*kaitai.Stream) (any, error), spec batterySpec) func([]byte) (Decoded, error) {
+func kaitaiDecoder(parse func(*kaitai.Stream) (any, error), specs ...batterySpec) func([]byte) (Decoded, error) {
 	return func(frame []byte) (d Decoded, err error) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -147,22 +150,33 @@ func kaitaiDecoder(parse func(*kaitai.Stream) (any, error), spec batterySpec) fu
 		if perr != nil {
 			return Decoded{}, fmt.Errorf("%w: %v", ErrNotBeacon, perr)
 		}
-		raw, ok := findNumber(reflect.ValueOf(parsed), spec.Voltage, 0)
-		if !ok {
-			return Decoded{}, fmt.Errorf("%w: no %s in this packet", ErrNotBeacon, spec.Voltage)
-		}
-		mv := int(math.Round(raw * spec.VoltageScale))
-		if mv < spec.MinMV || mv > spec.MaxMV {
-			return Decoded{}, fmt.Errorf("%w: %d mV", ErrImplausible, mv)
-		}
-		r := BatteryReading{Battery: "main", VoltageMV: mv}
-		if spec.Current != "" {
-			if c, ok := findNumber(reflect.ValueOf(parsed), spec.Current, 0); ok {
-				ma := int(math.Round(c * spec.CurrentScale))
-				r.CurrentMA = &ma
+		var out Decoded
+		for i, spec := range specs {
+			raw, ok := findNumber(reflect.ValueOf(parsed), spec.Voltage, 0)
+			if !ok {
+				if i == 0 {
+					return Decoded{}, fmt.Errorf("%w: no %s in this packet", ErrNotBeacon, spec.Voltage)
+				}
+				continue
 			}
+			mv := int(math.Round(raw * spec.VoltageScale))
+			if mv < spec.MinMV || mv > spec.MaxMV {
+				return Decoded{}, fmt.Errorf("%w: %s %d mV", ErrImplausible, spec.Voltage, mv)
+			}
+			name := spec.Battery
+			if name == "" {
+				name = "main"
+			}
+			r := BatteryReading{Battery: name, VoltageMV: mv}
+			if spec.Current != "" {
+				if c, ok := findNumber(reflect.ValueOf(parsed), spec.Current, 0); ok {
+					ma := int(math.Round(c * spec.CurrentScale))
+					r.CurrentMA = &ma
+				}
+			}
+			out.Batteries = append(out.Batteries, r)
 		}
-		return Decoded{Batteries: []BatteryReading{r}}, nil
+		return out, nil
 	}
 }
 

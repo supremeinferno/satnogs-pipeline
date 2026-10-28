@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/hex"
 	"errors"
+	"github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
 	"math/rand"
 	"os"
 	"slices"
@@ -162,5 +163,23 @@ func TestUWE4ThroughTheRegistry(t *testing.T) {
 	a := d.Batteries[0]
 	if a.Battery != "a" || a.VoltageMV != 4108 || a.CurrentMA == nil || *a.CurrentMA != 118 {
 		t.Fatalf("battery a: %+v", a)
+	}
+}
+
+// A spec per battery: each found voltage becomes a reading, a missing second
+// battery is skipped, a missing first one means another kind of packet.
+func TestKaitaiDecoderSeveralBatteries(t *testing.T) {
+	type frame struct{ V1, V2 uint16 }
+	dec := func(f frame) (Decoded, error) {
+		return kaitaiDecoder(func(*kaitai.Stream) (any, error) { return &f, nil },
+			batterySpec{Battery: "a", Voltage: "V1", VoltageScale: 10, MinMV: 3000, MaxMV: 4500},
+			batterySpec{Battery: "b", Voltage: "V2", VoltageScale: 10, MinMV: 3000, MaxMV: 4500})(nil)
+	}
+	d, err := dec(frame{V1: 400, V2: 395})
+	if err != nil || len(d.Batteries) != 2 || d.Batteries[0].Battery != "a" || d.Batteries[1].VoltageMV != 3950 {
+		t.Fatalf("%v, %+v", err, d)
+	}
+	if _, err := dec(frame{V1: 400, V2: 900}); !errors.Is(err, ErrImplausible) {
+		t.Errorf("9 V on a 4.5 V battery gave %v", err)
 	}
 }
