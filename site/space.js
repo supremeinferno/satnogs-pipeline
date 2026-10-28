@@ -255,9 +255,10 @@ function showcase() {
       const ep = Date.parse(f[iT] + "Z"), e = +f[iE], inc = f[iI] * D, raan = f[iO] * D, argp = f[iW] * D;
       // the orbit's orientation, so a point in its plane (x, y) becomes x·P + y·Q
       const cO = Math.cos(raan), sO = Math.sin(raan), ci = Math.cos(inc), si = Math.sin(inc), cw = Math.cos(argp), sw = Math.sin(argp);
-      rows.push({ a, e, ns, ep, M0: f[iM] * D, P: [cO * cw - sO * sw * ci, sO * cw + cO * sw * ci, sw * si], Q: [-cO * sw - sO * cw * ci, -sO * sw + cO * cw * ci, cw * si], n, ours: ours.has(+f[iId]) });
+      rows.push({ a, e, ns, ep, M0: f[iM] * D, P: [cO * cw - sO * sw * ci, sO * cw + cO * sw * ci, sw * si], Q: [-cO * sw - sO * cw * ci, -sO * sw + cO * cw * ci, cw * si], n, ours: ours.has(+f[iId]), name: f[0] });
     }
     const count = document.getElementById("sky-count"); if (count) count.textContent = rows.length.toLocaleString("en-GB");
+    try { shadowMinutes(rows); } catch (err) { console.warn("shadow minutes:", err); }
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
@@ -330,6 +331,50 @@ function showcase() {
     requestAnimationFrame(frame);
   }
 }
+
+// Minutes per orbit in the Earth's shadow for every satellite, today: one
+// orbit sampled 90 times, each point tested against the shadow cylinder that
+// watch uses (radius one Earth radius, pointing away from the Sun). The Sun
+// barely moves in one orbit, so its direction is taken once.
+function shadowMinutes(rows) {
+  const box = document.getElementById("shadow-box"); if (!box) return;
+  const D = Math.PI / 180, t = Date.now(), dn = t / 86400000 + 2440587.5 - 2451545, g = (357.528 + 0.9856003 * dn) * D;
+  const lam = (280.46 + 0.9856474 * dn + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * D, eps = (23.439 - 4e-7 * dn) * D;
+  const sun = [Math.cos(lam), Math.cos(eps) * Math.sin(lam), Math.sin(eps) * Math.sin(lam)]; // inertial frame, like the orbits
+  const N = 90;
+  for (const x of rows) {
+    let dark = 0;
+    for (let k = 0; k < N; k++) {
+      const M = (k / N) * 2 * Math.PI;
+      let E = M; for (let j = 0; j < 5; j++) E -= (E - x.e * Math.sin(E) - M) / (1 - x.e * Math.cos(E));
+      const px = x.a * (Math.cos(E) - x.e), py = x.a * Math.sqrt(1 - x.e * x.e) * Math.sin(E);
+      const r = [px * x.P[0] + py * x.Q[0], px * x.P[1] + py * x.Q[1], px * x.P[2] + py * x.Q[2]];
+      const along = r[0] * sun[0] + r[1] * sun[1] + r[2] * sun[2];
+      if (along < 0) { const q = [r[0] - along * sun[0], r[1] - along * sun[1], r[2] - along * sun[2]]; if (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] < 1) dark++; }
+    }
+    x.period = 1440 / x.n; x.darkMin = dark / N * x.period;
+  }
+  const bins = [["never, right now", (m) => m < 0.5], ["1 to 15 min", (m) => m < 15], ["15 to 30 min", (m) => m < 30], ["30 to 40 min", (m) => m < 40], ["more than 40 min", () => true]];
+  const counts = bins.map(() => 0);
+  for (const x of rows) counts[bins.findIndex(([, f]) => f(x.darkMin))]++;
+  const low = rows.filter((x) => x.n > 11.25).map((x) => x.darkMin).sort((a, b) => a - b);
+  const median = low[Math.floor(low.length / 2)] || 0;
+  document.getElementById("shadow-sum").textContent =
+    `A satellite in a low orbit typically spends ${Math.round(median)} minutes of each trip in the Earth's shadow, running on its battery. ${counts[0].toLocaleString("en-GB")} satellites never enter the shadow right now: geostationary ones outside the eclipse seasons, and low ones that fly along the line between day and night.`;
+  const max = Math.max(...counts);
+  document.getElementById("shadow-bars").innerHTML = bins.map(([label], i) =>
+    `<div class="sbar"><span>${label}</span><i style="width:${(100 * counts[i] / max).toFixed(1)}%"></i><b>${counts[i].toLocaleString("en-GB")}</b></div>`).join("");
+  const q = document.getElementById("shadow-q"), hits = document.getElementById("shadow-hits");
+  const fmt = (x) => `<li><b>${esc(x.name)}</b><span>${x.darkMin < 0.5 ? "no shadow right now" : Math.round(x.darkMin) + " min in the dark"} of a ${Math.round(x.period)}-minute orbit</span></li>`;
+  const show = () => {
+    const v = q.value.trim().toUpperCase();
+    const list = v ? rows.filter((x) => x.name.toUpperCase().includes(v)).slice(0, 6) : rows.filter((x) => x.ours);
+    hits.innerHTML = list.length ? list.map(fmt).join("") : "<li><span>No satellite by that name in the active catalog.</span></li>";
+  };
+  q.addEventListener("input", show); show();
+  box.hidden = false;
+}
+function esc(v) { return String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
 
 // Sections fade up as they scroll into view.
 function reveal() {
