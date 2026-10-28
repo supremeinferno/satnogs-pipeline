@@ -1,13 +1,17 @@
-// The 3D below the globe: a starfield behind the page (dark theme only), a
+// The 3D below the globe: a starfield behind the page, a
 // small CubeSat model on each satellite's card, and cards that tilt toward the
 // pointer. One WebGL renderer draws every model in turn and copies it into the
 // card's own canvas, so the page never holds more than this and the globe's
 // WebGL contexts. Without WebGL, or with reduced motion, the page is as before.
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { earthMaterial } from "./earth.js";
 
+// A soft studio light for the models' metal, made once per renderer.
+let cellTex = null; // the solar-cell texture, drawn on first use (declared here: the scenes start before the code below runs)
+const studio = (renderer) => new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const dark = matchMedia("(prefers-color-scheme: dark)");
 const snap = window.statusSnapshot || await new Promise((r) => document.addEventListener("snapshot", (e) => r(e.detail), { once: true }));
 const byNorad = new Map((snap.satellites || []).map((s) => [s.norad, s]));
 
@@ -34,8 +38,6 @@ function starfield() {
   });
   const size = () => { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
   size(); addEventListener("resize", size);
-  const show = () => { canvas.hidden = !dark.matches; };
-  show(); dark.addEventListener("change", show);
   let t = 0;
   const frame = () => {
     requestAnimationFrame(frame);
@@ -60,7 +62,8 @@ function cubesats() {
   const ambient = new THREE.AmbientLight(0xffffff, 0.5), sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
   sun.position.set(3, 2, 2); scene.add(ambient, sun);
 
-  const { sat, cellMat } = makeCubeSat();
+  const { sat, cellMat, panelMat } = makeCubeSat();
+  scene.environment = studio(renderer);
   sat.scale.setScalar(0.82); scene.add(sat); // small enough that the panels stay in view as it turns
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 1.05, 48), new THREE.MeshBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = -0.85; scene.add(ring);
@@ -86,9 +89,10 @@ function cubesats() {
     for (const c of visible) {
       const s = byNorad.get(Number(c.dataset.norad)); if (!s) continue;
       const lit = s.sunlit_now !== false;
-      sun.intensity = lit ? 3 : 0; ambient.intensity = lit ? 0.9 : 0.25;
+      sun.intensity = lit ? 2.6 : 0.6; ambient.intensity = lit ? 0.5 : 0.45; // in shadow: dimmer and blue, still readable
       ambient.color.setHex(lit ? 0xffffff : 0x7f8fd6);
-      cellMat.emissive.setHex(lit ? 0x16306e : 0x060a20); // panels glow in sunlight
+      cellMat.emissive.setHex(lit ? 0x16306e : 0x060a20); panelMat.emissive.copy(cellMat.emissive); // panels glow in sunlight
+      sun.color.setHex(lit ? 0xfff1d6 : 0x8fa0ff);
       ring.material.color.setHex(ringColor(s));
       ring.material.opacity = 0.28 + 0.12 * Math.sin(now / 600 + s.norad);
       const spin = reduced ? 0.6 : now / 4000 + s.norad;
@@ -102,32 +106,54 @@ function cubesats() {
   requestAnimationFrame(frame);
 }
 
-// A 1U CubeSat, 10 cm a side: a body with solar cells on its faces, two panels
-// on hinges (pivot.rotation.z: 0 open, ±π/2 folded against the sides) and an
-// antenna. Shared by the cards and the story.
+// A 1U CubeSat, 10 cm a side: a dark body with silver corner rails and end
+// plates, solar cells on four faces, two face-sized panels on hinges at the top
+// edge (pivot.rotation.z: about 0 open, folded down against the sides at
+// -sign·π/2) and a tape antenna. Shared by the rows and the story; mats lists
+// the materials, so a scene can dim their reflections.
+function cells(cols, rows) {
+  // dark-blue cells in a silver grid, drawn once and repeated
+  if (!cellTex) {
+    const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 128, 128); grad.addColorStop(0, "#1d3f9a"); grad.addColorStop(1, "#0f2463");
+    g.fillStyle = "#c7d0dc"; g.fillRect(0, 0, 128, 128); g.fillStyle = grad; g.fillRect(4, 4, 120, 120);
+    g.strokeStyle = "rgba(160, 190, 255, .35)"; g.lineWidth = 1;
+    for (let k = 1; k < 6; k++) { g.beginPath(); g.moveTo(4, 4 + k * 20); g.lineTo(124, 4 + k * 20); g.stroke(); }
+    cellTex = new THREE.CanvasTexture(c); cellTex.colorSpace = THREE.SRGBColorSpace; cellTex.wrapS = cellTex.wrapT = THREE.RepeatWrapping; cellTex.anisotropy = 4;
+  }
+  const t = cellTex.clone(); t.needsUpdate = true; t.repeat.set(cols, rows); return t;
+}
 function makeCubeSat() {
   const sat = new THREE.Group();
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0xd6dee8, metalness: 0.55, roughness: 0.35 });
-  const cellMat = new THREE.MeshStandardMaterial({ color: 0x2f62d8, metalness: 0.35, roughness: 0.25, emissive: 0x000000 });
-  sat.add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), frameMat));
+  const rail = new THREE.MeshStandardMaterial({ color: 0xdfe5ec, metalness: 0.9, roughness: 0.28 });
+  const body = new THREE.MeshStandardMaterial({ color: 0x1a1f29, metalness: 0.4, roughness: 0.55 });
+  const cellMat = new THREE.MeshStandardMaterial({ map: cells(2, 2), metalness: 0.45, roughness: 0.22, emissive: 0x000000 });
+  const panelMat = new THREE.MeshStandardMaterial({ map: cells(2, 2), metalness: 0.45, roughness: 0.22, emissive: 0x000000 });
+  const mats = [rail, body, cellMat, panelMat];
+  sat.add(new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.86, 0.86), body));
+  for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { // corner rails
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.96, 0.07), rail); m.position.set(x * 0.43, 0, z * 0.43); sat.add(m);
+  }
+  for (const y of [1, -1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.04, 0.92), rail); m.position.y = y * 0.45; sat.add(m); }
   for (const [axis, sign] of [["x", 1], ["x", -1], ["z", 1], ["z", -1]]) { // cells on four faces
-    const c = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.72), cellMat);
-    c.position[axis] = sign * 0.452;
+    const c = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.74), cellMat);
+    c.position[axis] = sign * 0.432;
     if (axis === "x") c.rotation.y = sign * Math.PI / 2; else if (sign < 0) c.rotation.y = Math.PI;
     sat.add(c);
   }
   const pivots = [1, -1].map((sign) => {
-    const pivot = new THREE.Group(); pivot.position.set(sign * 0.46, 0.2, 0);
-    const back = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.03, 0.8), frameMat);
-    const cells = new THREE.Mesh(new THREE.PlaneGeometry(1.12, 0.72), cellMat);
-    cells.rotation.x = -Math.PI / 2; cells.position.y = 0.017;
-    const panel = new THREE.Group(); panel.add(back, cells); panel.position.x = sign * 0.62;
-    pivot.add(panel); pivot.rotation.z = sign * 0.18; pivot.userData.sign = sign;
+    const pivot = new THREE.Group(); pivot.position.set(sign * 0.47, 0.45, 0);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.025, 0.84), rail);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.78), panelMat);
+    face.rotation.x = -Math.PI / 2; face.position.y = 0.014;
+    const under = face.clone(); under.rotation.x = Math.PI / 2; under.position.y = -0.014;
+    const panel = new THREE.Group(); panel.add(back, face, under); panel.position.x = sign * 0.45;
+    pivot.add(panel); pivot.rotation.z = sign * 0.12; pivot.userData.sign = sign;
     sat.add(pivot); return pivot;
   });
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.9, 6), frameMat);
-  antenna.position.set(0.25, 0.85, 0.25); sat.add(antenna);
-  return { sat, cellMat, pivots, antenna };
+  const antenna = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.9, 0.03), rail);
+  antenna.position.set(0.2, 0.9, 0.3); sat.add(antenna);
+  return { sat, cellMat: cellMat, panelMat, pivots, antenna, mats };
 }
 
 // The scroll story: one CubeSat pinned to the screen while four short
@@ -143,8 +169,9 @@ function story() {
   camera.position.set(0, 0.5, 7.5); camera.lookAt(0, 0.1, 0);
   const ambient = new THREE.AmbientLight(0x9fb4d0, 0.3), sun = new THREE.DirectionalLight(0xfff1d6, 0);
   sun.position.set(6, 4, 3); scene.add(ambient, sun);
-  const { sat, cellMat, pivots, antenna } = makeCubeSat();
+  const { sat, cellMat, panelMat, pivots, antenna, mats } = makeCubeSat();
   sat.scale.setScalar(0.95); scene.add(sat);
+  scene.environment = studio(renderer);
 
   const glowTex = (() => {
     const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
@@ -193,14 +220,15 @@ function story() {
     const p = Math.min(Math.max(-rect.top / Math.max(rect.height - H, 1), 0), 1), seg = p * 4, i = Math.min(3, Math.floor(seg));
     // chapter 1: the panels unfold as it turns in
     const open = smooth(0.04, 0.2, p);
-    for (const pv of pivots) pv.rotation.z = pv.userData.sign * (0.18 * open + (Math.PI / 2) * (1 - open));
+    for (const pv of pivots) pv.rotation.z = pv.userData.sign * (0.12 * open - (Math.PI / 2) * (1 - open)); // folded down, then open
     sat.rotation.set(0.3 + 0.08 * Math.sin(now / 2400), -0.9 + p * Math.PI * 1.6 + (reduced ? 0 : now / 9000), 0.12);
     // chapter 2: sunlight; chapter 3: the Earth covers the Sun
     const sunUp = smooth(0.24, 0.36, p), eclipse = smooth(0.5, 0.62, p), light = sunUp * (1 - eclipse);
     // before the Sun it is softly lit; only the eclipse makes it dark
     sun.intensity = 3.2 * light; ambient.intensity = 0.55 + 0.35 * light - 0.38 * eclipse;
     ambient.color.setHex(eclipse > 0.5 ? 0x7f8fd6 : 0xffffff);
-    cellMat.emissive.copy(dark).lerp(lit, light);
+    cellMat.emissive.copy(dark).lerp(lit, light); panelMat.emissive.copy(cellMat.emissive);
+    for (const m of mats) m.envMapIntensity = 0.15 + 0.85 * (1 - eclipse); // the eclipse takes the reflections away too
     sunGlow.scale.setScalar(3 + 9 * sunUp); sunGlow.material.opacity = sunUp * (1 - eclipse);
     // the Earth slides in from the right until it covers the Sun
     earth.position.set(SUN_AT.x + 2.2 + 16 * (1 - eclipse), SUN_AT.y + 1.6, SUN_AT.z - 1);
